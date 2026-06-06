@@ -7,6 +7,7 @@ import { errorHandler } from './src/middleware/errorHandler.js';
 import { PORT, FRONTEND_URL, NODE_ENV } from './src/config/constants.js';
 import paymentsRouter from './src/routes/paymentRoutes.js';
 import scannerRouter from './src/routes/scannerRoutes.js';
+import notificationsRouter from './src/routes/notificationRoutes.js';
 
 const app = express();
 
@@ -46,8 +47,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/payments', paymentsRouter);
 app.use('/api/scanner', scannerRouter);
-// import notificationsRouter from './src/routes/notificationRoutes.js';
-// app.use('/api/notifications', notificationsRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // 404 handler
 app.use('{*any}', (req, res) => {

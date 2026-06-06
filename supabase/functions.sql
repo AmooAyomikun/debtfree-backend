@@ -1,3 +1,6 @@
+-- MANUAL TASK: Run this in Supabase SQL Editor:
+-- alter table profiles add column if not exists fcm_token text;
+
 -- ==========================================
 -- DEBTFREE DATABASE RPC FUNCTIONS
 -- Run these in the Supabase SQL Editor to enable wallet and debt settlement operations.
