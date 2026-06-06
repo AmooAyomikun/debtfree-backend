@@ -1,12 +1,11 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { PORT, FRONTEND_URL, NODE_ENV } from './src/config/constants.js';
-
-dotenv.config();
+import paymentsRouter from './src/routes/paymentRoutes.js';
 
 const app = express();
 
@@ -43,11 +42,10 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Routes (uncomment as we build each one)
-// import paymentsRouter from './src/routes/paymentRoutes.js';
+// Routes
+app.use('/api/payments', paymentsRouter);
 // import scannerRouter from './src/routes/scannerRoutes.js';
 // import notificationsRouter from './src/routes/notificationRoutes.js';
-// app.use('/api/payments', paymentsRouter);
 // app.use('/api/scanner', scannerRouter);
 // app.use('/api/notifications', notificationsRouter);
 
