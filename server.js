@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { PORT, FRONTEND_URL, NODE_ENV } from './src/config/constants.js';
 import paymentsRouter from './src/routes/paymentRoutes.js';
+import scannerRouter from './src/routes/scannerRoutes.js';
 
 const app = express();
 
@@ -44,9 +45,8 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/payments', paymentsRouter);
-// import scannerRouter from './src/routes/scannerRoutes.js';
+app.use('/api/scanner', scannerRouter);
 // import notificationsRouter from './src/routes/notificationRoutes.js';
-// app.use('/api/scanner', scannerRouter);
 // app.use('/api/notifications', notificationsRouter);
 
 // 404 handler
