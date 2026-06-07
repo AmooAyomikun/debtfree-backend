@@ -10,16 +10,16 @@ export async function scanReceipt(req, res, next) {
       return errorResponse(res, 'Image data is required', 400);
     }
 
-    // Rough size check: 5MB limit
-    if (image.length > 7000000) {
-      return errorResponse(res, 'Image too large. Please use an image under 5MB.', 400);
+    // Rough size check: 20MB limit
+    if (image.length > 20000000) {
+      return errorResponse(res, 'Image too large. Please use an image under 20MB.', 400);
     }
 
     // Validate mimeType
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'];
     const type = mimeType || 'image/jpeg';
     if (!allowedTypes.includes(type)) {
-      return errorResponse(res, 'Invalid image type. Use JPEG, PNG or WebP.', 400);
+      return errorResponse(res, 'Invalid file type. Use JPEG, PNG, WebP or PDF.', 400);
     }
 
     const result = await scanReceiptWithGemini(image, type);
