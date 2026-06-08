@@ -213,8 +213,8 @@ export async function settleDebt(req, res, next) {
     const { to_user_id, amount, group_id, split_ids } = req.body;
     const from_user = req.user;
 
-    if (!to_user_id || !amount || !split_ids?.length) {
-      return errorResponse(res, 'Missing required fields', 400);
+    if (!to_user_id || !amount) {
+      return errorResponse(res, 'Missing required fields: to_user_id and amount are required', 400);
     }
     if (amount <= 0) {
       return errorResponse(res, 'Amount must be greater than zero', 400);
@@ -232,29 +232,104 @@ export async function settleDebt(req, res, next) {
 
     const reference = generateReference('SETTLE');
 
-    const { error } = await supabase.rpc('settle_debt', {
-      p_from_user: from_user.id,
-      p_to_user: to_user_id,
-      p_amount: amount,
-      p_group_id: group_id,
-      p_split_ids: split_ids,
-      p_reference: reference
-    });
+    const isUUID = (str) => {
+      if (!str) return false;
+      return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(str);
+    };
 
-    if (error) throw error;
+    const isGroupUUID = isUUID(group_id);
+    const isToUserUUID = isUUID(to_user_id);
 
-    await supabase.from('notifications').insert({
-      user_id: to_user_id,
-      type: 'payment',
-      title: 'Debt Settled ✓',
-      message: `${profile.full_name} sent you ₦${amount.toLocaleString()}`,
-      action_url: `/groups/${group_id}`
-    });
+    if (isGroupUUID && isToUserUUID) {
+      // Both are database UUIDs: use the atomic postgres RPC function
+      const { error } = await supabase.rpc('settle_debt', {
+        p_from_user: from_user.id,
+        p_to_user: to_user_id,
+        p_amount: amount,
+        p_group_id: group_id,
+        p_split_ids: split_ids || [],
+        p_reference: reference
+      });
+
+      if (error) throw error;
+
+      await supabase.from('notifications').insert({
+        user_id: to_user_id,
+        type: 'payment',
+        title: 'Debt Settled ✓',
+        message: `${profile.full_name} sent you ₦${amount.toLocaleString()}`,
+        action_url: `/groups/${group_id}`
+      });
+    } else {
+      // Fallback for mock/local groups or mock/local users:
+      // We still actually move money by updating user balances and transactions!
+      
+      // 1. Deduct from sender's wallet balance
+      const { error: deductError } = await supabase
+        .from('profiles')
+        .update({ wallet_balance: profile.wallet_balance - amount })
+        .eq('id', from_user.id);
+      if (deductError) throw deductError;
+
+      // 2. Insert debit wallet transaction
+      const { error: txError } = await supabase
+        .from('wallet_transactions')
+        .insert({
+          user_id: from_user.id,
+          type: 'debit',
+          amount,
+          description: 'Debt settlement sent (local group)',
+          reference,
+          status: 'success',
+          payment_method: 'wallet'
+        });
+      if (txError) throw txError;
+
+      // 3. If recipient is a real user (valid UUID), credit them too
+      if (isToUserUUID) {
+        const { data: recipientProfile } = await supabase
+          .from('profiles')
+          .select('wallet_balance')
+          .eq('id', to_user_id)
+          .single();
+
+        if (recipientProfile) {
+          const { error: creditError } = await supabase
+            .from('profiles')
+            .update({ wallet_balance: (recipientProfile.wallet_balance || 0) + amount })
+            .eq('id', to_user_id);
+          if (creditError) throw creditError;
+
+          const { error: rxTxError } = await supabase
+            .from('wallet_transactions')
+            .insert({
+              user_id: to_user_id,
+              type: 'credit',
+              amount,
+              description: 'Debt settlement received',
+              reference: reference + '_recv',
+              status: 'success',
+              payment_method: 'wallet'
+            });
+          if (rxTxError) throw rxTxError;
+
+          // Notify recipient
+          await supabase.from('notifications').insert({
+            user_id: to_user_id,
+            type: 'payment',
+            title: 'Debt Settled ✓',
+            message: `${profile.full_name} sent you ₦${amount.toLocaleString()}`,
+            action_url: '/wallet'
+          });
+        }
+      }
+    }
 
     log.payment(reference, 'DEBT_SETTLED', {
       from: from_user.id,
       to: to_user_id,
-      amount
+      amount,
+      isLocal: !(isGroupUUID && isToUserUUID)
     });
 
     return successResponse(res, { reference }, 'Debt settled successfully');
