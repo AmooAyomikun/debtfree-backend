@@ -8,6 +8,8 @@ import { PORT, FRONTEND_URL, NODE_ENV } from './src/config/constants.js';
 import paymentsRouter from './src/routes/paymentRoutes.js';
 import scannerRouter from './src/routes/scannerRoutes.js';
 import notificationsRouter from './src/routes/notificationRoutes.js';
+import userRouter from './src/routes/userRoutes.js';
+import groupRouter from './src/routes/groupRoutes.js';
 
 const app = express();
 
@@ -48,6 +50,8 @@ app.get('/health', (req, res) => {
 app.use('/api/payments', paymentsRouter);
 app.use('/api/scanner', scannerRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/users', userRouter);
+app.use('/api/groups', groupRouter);
 
 // 404 handler
 app.use('{*any}', (req, res) => {
