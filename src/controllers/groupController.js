@@ -1,6 +1,59 @@
 import { supabase } from '../config/supabase.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 
+// Helper to format savings circle nested structure for the frontend
+function formatSavingsCircle(circle, circleMembers, contributions) {
+  if (!circle) return null;
+
+  const totalCycles = circle.total_members;
+  const cycleDurationDays = circle.frequency === 'weekly' ? 7 : circle.frequency === 'biweekly' ? 14 : 30;
+  const baseDate = new Date(circle.start_date || circle.created_at);
+
+  const payoutOrder = circleMembers.map(cm => cm.user_id);
+
+  const cycles = [];
+  for (let i = 1; i <= totalCycles; i++) {
+    const cycleStart = new Date(baseDate.getTime() + (i - 1) * cycleDurationDays * 24 * 60 * 60 * 1000);
+    const cycleEnd = new Date(baseDate.getTime() + i * cycleDurationDays * 24 * 60 * 60 * 1000);
+    
+    const cycleContributions = contributions
+      .filter(c => c.cycle_number === i)
+      .map(c => ({
+        userId: c.user_id,
+        paid: c.status === 'paid',
+        paidDate: c.paid_at ? c.paid_at.split('T')[0] : null
+      }));
+
+    const recipientMember = circleMembers.find(cm => cm.position === i);
+    const recipient = recipientMember ? recipientMember.user_id : '';
+
+    let payoutStatus = 'upcoming';
+    if (circle.current_cycle === i) {
+      payoutStatus = 'in_progress';
+    } else if (circle.current_cycle > i) {
+      payoutStatus = 'completed';
+    }
+
+    cycles.push({
+      cycleNumber: i,
+      startDate: cycleStart.toISOString().split('T')[0],
+      endDate: cycleEnd.toISOString().split('T')[0],
+      recipient,
+      payoutAmount: Number(circle.contribution_amount) * circleMembers.length,
+      payoutStatus,
+      contributions: cycleContributions
+    });
+  }
+
+  return {
+    contributionAmount: Number(circle.contribution_amount),
+    frequency: circle.frequency,
+    startDate: circle.start_date,
+    payoutOrder,
+    cycles
+  };
+}
+
 // Get all groups the authenticated user is a member of
 export async function getGroups(req, res) {
   try {
@@ -46,7 +99,95 @@ export async function getGroups(req, res) {
       return errorResponse(res, 'Failed to fetch groups', 500);
     }
 
-    return successResponse(res, groupRows || [], 'Groups fetched successfully');
+    // 3. Fetch circles for these groups
+    const { data: circlesRows } = await supabase
+      .from('circles')
+      .select('*')
+      .in('group_id', groupIds);
+
+    // Fetch circle members and contributions for these groups
+    let circleMembersRows = [];
+    let contributionsRows = [];
+    if (circlesRows && circlesRows.length > 0) {
+      const circleIds = circlesRows.map(c => c.id);
+      
+      const { data: cmRows } = await supabase
+        .from('circle_members')
+        .select('*')
+        .in('circle_id', circleIds)
+        .order('position', { ascending: true });
+      circleMembersRows = cmRows || [];
+
+      const { data: cRows } = await supabase
+        .from('contributions')
+        .select('*')
+        .in('circle_id', circleIds);
+      contributionsRows = cRows || [];
+    }
+
+    const formattedGroups = await Promise.all((groupRows || []).map(async (g) => {
+      const circle = (circlesRows || []).find(c => c.group_id === g.id);
+      let savings_circle = null;
+      if (circle) {
+        const cMembers = circleMembersRows.filter(cm => cm.circle_id === circle.id);
+        const cContributions = contributionsRows.filter(c => c.circle_id === circle.id);
+        savings_circle = formatSavingsCircle(circle, cMembers, cContributions);
+      } else if (g.type === 'savings') {
+        // Auto-heal on list load
+        const circleId = crypto.randomUUID();
+        const groupMembersList = (g.group_members || []).map(m => m.user_id);
+        
+        const circleRow = {
+          id: circleId,
+          group_id: g.id,
+          contribution_amount: 10000,
+          frequency: 'monthly',
+          total_members: groupMembersList.length,
+          current_cycle: 1,
+          payout_order: JSON.stringify(groupMembersList),
+          start_date: new Date().toISOString().split('T')[0],
+          status: 'active'
+        };
+
+        const { error: insertCircleErr } = await supabase
+          .from('circles')
+          .insert(circleRow);
+
+        if (!insertCircleErr) {
+          // Insert circle members
+          const circleMemberRows = groupMembersList.map((mUserId, index) => ({
+            circle_id: circleId,
+            user_id: mUserId,
+            position: index + 1,
+            has_received: false
+          }));
+          await supabase.from('circle_members').insert(circleMemberRows);
+
+          // Insert contributions
+          const contributionRows = [];
+          for (let i = 1; i <= groupMembersList.length; i++) {
+            groupMembersList.forEach(mUserId => {
+              contributionRows.push({
+                circle_id: circleId,
+                user_id: mUserId,
+                amount: 10000,
+                cycle_number: i,
+                status: 'pending'
+              });
+            });
+          }
+          await supabase.from('contributions').insert(contributionRows);
+
+          savings_circle = formatSavingsCircle(circleRow, circleMemberRows, contributionRows);
+        }
+      }
+      return {
+        ...g,
+        savings_circle
+      };
+    }));
+
+    return successResponse(res, formattedGroups, 'Groups fetched successfully');
   } catch (error) {
     console.error('getGroups error:', error);
     return errorResponse(res, 'Internal server error', 500);
@@ -56,7 +197,7 @@ export async function getGroups(req, res) {
 // Create a new group
 export async function createGroup(req, res) {
   try {
-    const { id, name, emoji, color, currency, type, description, inviteCode, members } = req.body;
+    const { id, name, emoji, color, currency, type, description, inviteCode, members, savingsCircle } = req.body;
     const userId = req.user.id;
 
     if (!name) {
@@ -69,8 +210,6 @@ export async function createGroup(req, res) {
       id: groupId,
       name,
       emoji: emoji || 'fa-users',
-      color: color || '#16a34a',
-      currency: currency || 'NGN',
       type: type || 'expense',
       description: description || '',
       invite_code: inviteCode || null,
@@ -101,13 +240,15 @@ export async function createGroup(req, res) {
     if (members && Array.isArray(members)) {
       members.forEach(m => {
         const memberUserId = m.userId || m.user_id || m.id;
-        if (memberUserId && !memberUserId.startsWith('pending_') && memberUserId !== userId) {
+        if (memberUserId && !memberUserId.startsWith('pending_')) {
           const cleanId = memberUserId.startsWith('user_') ? memberUserId.replace('user_', '') : memberUserId;
-          memberRows.push({
-            group_id: groupId,
-            user_id: cleanId,
-            role: m.role || 'member'
-          });
+          if (cleanId !== userId && !memberRows.some(row => row.user_id === cleanId)) {
+            memberRows.push({
+              group_id: groupId,
+              user_id: cleanId,
+              role: m.role || 'member'
+            });
+          }
         }
       });
     }
@@ -120,6 +261,73 @@ export async function createGroup(req, res) {
     if (memberErr) {
       console.error('Error inserting members:', memberErr);
       // We don't rollback, but return success since group is created. Members can be added/invited later.
+    }
+
+    // 4. If savings circle, insert circles, circle_members, and contributions
+    if (type === 'savings' && savingsCircle) {
+      const circleId = crypto.randomUUID();
+      const circleRow = {
+        id: circleId,
+        group_id: groupId,
+        contribution_amount: Number(savingsCircle.contributionAmount),
+        frequency: savingsCircle.frequency,
+        total_members: memberRows.length,
+        current_cycle: 1,
+        payout_order: JSON.stringify(savingsCircle.payoutOrder),
+        start_date: savingsCircle.startDate || new Date().toISOString().split('T')[0],
+        status: 'active'
+      };
+
+      const { error: circleErr } = await supabase
+        .from('circles')
+        .insert(circleRow);
+
+      if (circleErr) {
+        console.error('Error inserting circle:', circleErr);
+      } else {
+        // Insert circle members
+        const circleMemberRows = savingsCircle.payoutOrder.map((mUserId, index) => {
+          const cleanId = mUserId.startsWith('user_') ? mUserId.replace('user_', '') : mUserId;
+          return {
+            circle_id: circleId,
+            user_id: cleanId,
+            position: index + 1,
+            has_received: false
+          };
+        });
+
+        const { error: circleMemberErr } = await supabase
+          .from('circle_members')
+          .insert(circleMemberRows);
+
+        if (circleMemberErr) {
+          console.error('Error inserting circle members:', circleMemberErr);
+        }
+
+        // Insert contributions
+        const contributionRows = [];
+        savingsCircle.cycles.forEach(cycle => {
+          cycle.contributions.forEach(contrib => {
+            const cleanUserId = contrib.userId.startsWith('user_') ? contrib.userId.replace('user_', '') : contrib.userId;
+            contributionRows.push({
+              circle_id: circleId,
+              user_id: cleanUserId,
+              amount: Number(savingsCircle.contributionAmount),
+              cycle_number: cycle.cycleNumber,
+              status: contrib.paid ? 'paid' : 'pending',
+              paid_at: contrib.paidDate ? new Date(contrib.paidDate).toISOString() : null
+            });
+          });
+        });
+
+        const { error: contribErr } = await supabase
+          .from('contributions')
+          .insert(contributionRows);
+
+        if (contribErr) {
+          console.error('Error inserting contributions:', contribErr);
+        }
+      }
     }
 
     return successResponse(res, insertedGroup, 'Group created successfully', 211);
@@ -250,6 +458,81 @@ export async function getGroupDetail(req, res) {
       date: s.date || s.created_at?.split('T')[0],
     }));
 
+    // Fetch circle data if type is savings
+    let savings_circle = null;
+    if (g.type === 'savings') {
+      let { data: circle } = await supabase
+        .from('circles')
+        .select('*')
+        .eq('group_id', groupId)
+        .maybeSingle();
+
+      if (!circle) {
+        // Auto-heal on detail load
+        const circleId = crypto.randomUUID();
+        const groupMembersList = members.map(m => m.userId);
+        
+        const circleRow = {
+          id: circleId,
+          group_id: groupId,
+          contribution_amount: 10000,
+          frequency: 'monthly',
+          total_members: groupMembersList.length,
+          current_cycle: 1,
+          payout_order: JSON.stringify(groupMembersList),
+          start_date: new Date().toISOString().split('T')[0],
+          status: 'active'
+        };
+
+        const { error: insertCircleErr } = await supabase
+          .from('circles')
+          .insert(circleRow);
+
+        if (!insertCircleErr) {
+          circle = circleRow;
+
+          // Insert circle members
+          const circleMemberRows = groupMembersList.map((mUserId, index) => ({
+            circle_id: circleId,
+            user_id: mUserId,
+            position: index + 1,
+            has_received: false
+          }));
+          await supabase.from('circle_members').insert(circleMemberRows);
+
+          // Insert contributions
+          const contributionRows = [];
+          for (let i = 1; i <= groupMembersList.length; i++) {
+            groupMembersList.forEach(mUserId => {
+              contributionRows.push({
+                circle_id: circleId,
+                user_id: mUserId,
+                amount: 10000,
+                cycle_number: i,
+                status: 'pending'
+              });
+            });
+          }
+          await supabase.from('contributions').insert(contributionRows);
+        }
+      }
+
+      if (circle) {
+        const { data: cMembers } = await supabase
+          .from('circle_members')
+          .select('*')
+          .eq('circle_id', circle.id)
+          .order('position', { ascending: true });
+        
+        const { data: cContributions } = await supabase
+          .from('contributions')
+          .select('*')
+          .eq('circle_id', circle.id);
+
+        savings_circle = formatSavingsCircle(circle, cMembers || [], cContributions || []);
+      }
+    }
+
     const groupDetailObj = {
       id: g.id,
       name: g.name,
@@ -263,6 +546,7 @@ export async function getGroupDetail(req, res) {
       members,
       expenses,
       settlements,
+      savings_circle
     };
 
     return successResponse(res, groupDetailObj, 'Group detail fetched successfully');
@@ -398,7 +682,7 @@ export async function addExpense(req, res) {
   try {
     const groupId = req.params.id;
     const userId = req.user.id;
-    const { paidBy, amount, title, description, category, date, splits, groupName } = req.body;
+    const { paidBy, amount, title, description, category, date, splits, groupName, notes, splitType, receipt } = req.body;
 
     if (!amount || !title) {
       return errorResponse(res, 'Amount and title are required', 400);
@@ -409,10 +693,19 @@ export async function addExpense(req, res) {
       paid_by: paidBy || userId,
       amount: Number(amount),
       title: title,
-      description: description || title,
       category: category || 'other',
-      date: date || new Date().toISOString().split('T')[0]
+      note: notes || description || title,
+      split_method: splitType || 'equal',
+      receipt_url: receipt || null
     };
+
+    if (date) {
+      try {
+        expenseRow.created_at = new Date(date).toISOString();
+      } catch (err) {
+        console.error('Invalid date format:', date);
+      }
+    }
 
     // 1. Insert expense
     const { data: insertedExpense, error: expErr } = await supabase
@@ -584,6 +877,132 @@ export async function inviteMember(req, res) {
     return successResponse(res, null, 'Member invited successfully');
   } catch (error) {
     console.error('inviteMember error:', error);
+    return errorResponse(res, 'Internal server error', 500);
+  }
+}
+
+// Record a contribution payment for a savings circle
+export async function recordContribution(req, res) {
+  try {
+    const groupId = req.params.id;
+    const userId = req.user.id;
+    const { cycleNumber, memberId, paymentMethod, amount } = req.body;
+
+    // 1. Fetch the circle for this group
+    const { data: circle, error: circleErr } = await supabase
+      .from('circles')
+      .select('id, contribution_amount')
+      .eq('group_id', groupId)
+      .single();
+
+    if (circleErr || !circle) {
+      return errorResponse(res, 'Savings circle not found for this group', 404);
+    }
+
+    // 2. Check if a contribution row already exists for this cycle & user
+    const targetUserId = memberId || userId;
+    const { data: existingContrib } = await supabase
+      .from('contributions')
+      .select('id')
+      .eq('circle_id', circle.id)
+      .eq('user_id', targetUserId)
+      .eq('cycle_number', cycleNumber)
+      .maybeSingle();
+
+    if (existingContrib) {
+      // Update the status to 'paid'
+      const { error: updateErr } = await supabase
+        .from('contributions')
+        .update({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+          payment_reference: paymentMethod || 'wallet'
+        })
+        .eq('id', existingContrib.id);
+
+      if (updateErr) {
+        console.error('Error updating contribution:', updateErr);
+        return errorResponse(res, 'Failed to record contribution', 500);
+      }
+    } else {
+      // Insert new contribution row
+      const { error: insertErr } = await supabase
+        .from('contributions')
+        .insert({
+          circle_id: circle.id,
+          user_id: targetUserId,
+          amount: amount || Number(circle.contribution_amount),
+          cycle_number: cycleNumber,
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+          payment_reference: paymentMethod || 'wallet'
+        });
+
+      if (insertErr) {
+        console.error('Error inserting contribution:', insertErr);
+        return errorResponse(res, 'Failed to record contribution', 500);
+      }
+    }
+
+    return successResponse(res, null, 'Contribution recorded successfully');
+  } catch (error) {
+    console.error('recordContribution error:', error);
+    return errorResponse(res, 'Internal server error', 500);
+  }
+}
+
+// Record a payout completed for a cycle in a savings circle
+export async function recordPayout(req, res) {
+  try {
+    const groupId = req.params.id;
+    const { cycleNumber, date } = req.body;
+
+    // 1. Fetch the circle for this group
+    const { data: circle, error: circleErr } = await supabase
+      .from('circles')
+      .select('*')
+      .eq('group_id', groupId)
+      .single();
+
+    if (circleErr || !circle) {
+      return errorResponse(res, 'Savings circle not found for this group', 404);
+    }
+
+    // 2. Fetch the recipient for this cycle
+    const { data: circleMembers } = await supabase
+      .from('circle_members')
+      .select('*')
+      .eq('circle_id', circle.id)
+      .eq('position', cycleNumber);
+
+    if (circleMembers && circleMembers.length > 0) {
+      const recipient = circleMembers[0];
+      // Update has_received status in circle_members
+      await supabase
+        .from('circle_members')
+        .update({
+          has_received: true,
+          received_at: date || new Date().toISOString()
+        })
+        .eq('id', recipient.id);
+    }
+
+    // 3. Update circles table current_cycle to next cycle (current_cycle + 1)
+    const { error: updateCircleErr } = await supabase
+      .from('circles')
+      .update({
+        current_cycle: Number(cycleNumber) + 1
+      })
+      .eq('id', circle.id);
+
+    if (updateCircleErr) {
+      console.error('Error updating current cycle:', updateCircleErr);
+      return errorResponse(res, 'Failed to update savings cycle', 500);
+    }
+
+    return successResponse(res, null, 'Payout recorded successfully');
+  } catch (error) {
+    console.error('recordPayout error:', error);
     return errorResponse(res, 'Internal server error', 500);
   }
 }

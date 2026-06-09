@@ -11,7 +11,9 @@ import {
   addExpense,
   deleteExpense,
   addSettlement,
-  inviteMember
+  inviteMember,
+  recordContribution,
+  recordPayout
 } from '../controllers/groupController.js';
 
 const router = Router();
@@ -35,5 +37,9 @@ router.delete('/:id/expenses/:expenseId', generalLimiter, deleteExpense);
 
 // Settlements
 router.post('/:id/settlements', generalLimiter, addSettlement);
+
+// Savings Circles
+router.post('/:id/contributions', generalLimiter, recordContribution);
+router.post('/:id/payouts', generalLimiter, recordPayout);
 
 export default router;
