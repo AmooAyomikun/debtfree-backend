@@ -74,7 +74,7 @@ export async function getGroups(req, res) {
       return successResponse(res, [], 'No groups found');
     }
 
-    const groupIds = memberRows.map(r => r.group_id);
+    const groupIds = [...new Set(memberRows.map(r => r.group_id).filter(Boolean))];
 
     // 2. Fetch those groups along with their members and their profiles
     const { data: groupRows, error: groupErr } = await supabase
@@ -187,7 +187,14 @@ export async function getGroups(req, res) {
       };
     }));
 
-    return successResponse(res, formattedGroups, 'Groups fetched successfully');
+    const seen = new Set();
+    const dedupedGroups = formattedGroups.filter(g => {
+      if (!g || seen.has(g.id)) return false;
+      seen.add(g.id);
+      return true;
+    });
+
+    return successResponse(res, dedupedGroups, 'Groups fetched successfully');
   } catch (error) {
     console.error('getGroups error:', error);
     return errorResponse(res, 'Internal server error', 500);
@@ -206,13 +213,18 @@ export async function createGroup(req, res) {
 
     const groupId = id || crypto.randomUUID();
 
+    // Auto-generate an invite code if one isn't provided
+    const autoInviteCode = inviteCode || Math.random().toString(36).substring(2, 9).toUpperCase();
+
     const groupRow = {
       id: groupId,
       name,
       emoji: emoji || 'fa-users',
+      color: color || '#1A6B4A',
+      currency: currency || 'NGN',
       type: type || 'expense',
       description: description || '',
-      invite_code: inviteCode || null,
+      invite_code: autoInviteCode,
       created_by: userId
     };
 
@@ -264,7 +276,7 @@ export async function createGroup(req, res) {
     }
 
     // 4. If savings circle, insert circles, circle_members, and contributions
-    if (type === 'savings' && savingsCircle) {
+    if ((type === 'savings' || type === 'both') && savingsCircle) {
       const circleId = crypto.randomUUID();
       const circleRow = {
         id: circleId,
@@ -451,11 +463,11 @@ export async function getGroupDetail(req, res) {
 
     const settlements = (settlementsRows || []).map((s) => ({
       id: s.id,
-      from: s.from,
-      to: s.to,
+      from: s.from_user,
+      to: s.to_user,
       amount: Number(s.amount),
       method: s.method || 'bank_transfer',
-      date: s.date || s.created_at?.split('T')[0],
+      date: s.created_at?.split('T')[0],
     }));
 
     // Fetch circle data if type is savings
@@ -793,11 +805,11 @@ export async function addSettlement(req, res) {
 
     const settlementRow = {
       group_id: groupId,
-      from,
-      to,
+      from_user: from,
+      to_user: to,
       amount: Number(amount),
       method: method || 'bank_transfer',
-      date: date || new Date().toISOString().split('T')[0]
+      status: 'confirmed'
     };
 
     // 1. Insert settlement
