@@ -13,7 +13,10 @@ import {
   addSettlement,
   inviteMember,
   recordContribution,
-  recordPayout
+  recordPayout,
+  updateExpense,
+  removeMember,
+  updateMemberRole
 } from '../controllers/groupController.js';
 
 const router = Router();
@@ -33,7 +36,12 @@ router.post('/:id/invite', generalLimiter, inviteMember);
 
 // Expenses
 router.post('/:id/expenses', generalLimiter, addExpense);
+router.put('/:id/expenses/:expenseId', generalLimiter, updateExpense);
 router.delete('/:id/expenses/:expenseId', generalLimiter, deleteExpense);
+
+// Members
+router.delete('/:id/members/:userId', generalLimiter, removeMember);
+router.put('/:id/members/:userId/role', generalLimiter, updateMemberRole);
 
 // Settlements
 router.post('/:id/settlements', generalLimiter, addSettlement);

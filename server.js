@@ -10,6 +10,7 @@ import scannerRouter from './src/routes/scannerRoutes.js';
 import notificationsRouter from './src/routes/notificationRoutes.js';
 import userRouter from './src/routes/userRoutes.js';
 import groupRouter from './src/routes/groupRoutes.js';
+import kycRouter from './src/routes/kycRoutes.js';
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use('/api/scanner', scannerRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/users', userRouter);
 app.use('/api/groups', groupRouter);
+app.use('/api/kyc', kycRouter);
 
 // 404 handler
 app.use('{*any}', (req, res) => {
