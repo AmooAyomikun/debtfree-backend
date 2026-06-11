@@ -220,8 +220,6 @@ export async function createGroup(req, res) {
       id: groupId,
       name,
       emoji: emoji || 'fa-users',
-      color: color || '#1A6B4A',
-      currency: currency || 'NGN',
       type: type || 'expense',
       description: description || '',
       invite_code: autoInviteCode,
