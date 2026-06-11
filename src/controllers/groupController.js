@@ -132,7 +132,7 @@ export async function getGroups(req, res) {
         const cMembers = circleMembersRows.filter(cm => cm.circle_id === circle.id);
         const cContributions = contributionsRows.filter(c => c.circle_id === circle.id);
         savings_circle = formatSavingsCircle(circle, cMembers, cContributions);
-      } else if (g.type === 'savings') {
+      } else if (['savings', 'savings_circle', 'circle'].includes(g.type)) {
         // Auto-heal on list load
         const circleId = crypto.randomUUID();
         const groupMembersList = (g.group_members || []).map(m => m.user_id);
@@ -274,7 +274,7 @@ export async function createGroup(req, res) {
     }
 
     // 4. If savings circle, insert circles, circle_members, and contributions
-    if ((type === 'savings' || type === 'both') && savingsCircle) {
+    if (['savings', 'savings_circle', 'circle', 'both'].includes(type) && savingsCircle) {
       const circleId = crypto.randomUUID();
       const circleRow = {
         id: circleId,
@@ -470,7 +470,7 @@ export async function getGroupDetail(req, res) {
 
     // Fetch circle data if type is savings
     let savings_circle = null;
-    if (g.type === 'savings') {
+    if (['savings', 'savings_circle', 'circle'].includes(g.type)) {
       let { data: circle } = await supabase
         .from('circles')
         .select('*')
@@ -790,6 +790,49 @@ export async function deleteExpense(req, res) {
   }
 }
 
+// Update an expense
+export async function updateExpense(req, res) {
+  try {
+    const { id: groupId, expenseId } = req.params;
+    const { paidBy, amount, title, description, category, date, splits, notes, splitType, receipt } = req.body;
+    
+    const expenseUpdates = {
+      title,
+      amount: Number(amount),
+      paid_by: paidBy,
+      category: category || 'other',
+      note: notes || description || title,
+      split_method: splitType || 'equal',
+    };
+    if (receipt) expenseUpdates.receipt_url = receipt;
+    if (date) expenseUpdates.created_at = new Date(date).toISOString();
+
+    const { error: expErr } = await supabase
+      .from('expenses')
+      .update(expenseUpdates)
+      .eq('id', expenseId)
+      .eq('group_id', groupId);
+
+    if (expErr) return errorResponse(res, 'Failed to update expense', 500);
+
+    if (splits && Array.isArray(splits) && splits.length > 0) {
+      await supabase.from('expense_splits').delete().eq('expense_id', expenseId);
+      
+      const splitRows = splits.map(s => ({
+        expense_id: expenseId,
+        user_id: s.userId || s.user_id,
+        amount: Number(s.amount),
+        is_settled: false
+      }));
+      await supabase.from('expense_splits').insert(splitRows);
+    }
+    return successResponse(res, null, 'Expense updated successfully');
+  } catch (error) {
+    console.error('updateExpense error:', error);
+    return errorResponse(res, 'Internal server error', 500);
+  }
+}
+
 // Add a settlement
 export async function addSettlement(req, res) {
   try {
@@ -1017,3 +1060,67 @@ export async function recordPayout(req, res) {
   }
 }
 
+// Remove a member from a group
+export async function removeMember(req, res) {
+  try {
+    const { id: groupId, userId: targetUserId } = req.params;
+    const requesterId = req.user.id;
+
+    // Basic admin check
+    const { data: adminCheck } = await supabase
+      .from('group_members')
+      .select('role')
+      .eq('group_id', groupId)
+      .eq('user_id', requesterId)
+      .maybeSingle();
+
+    if (!adminCheck || adminCheck.role !== 'admin') {
+      return errorResponse(res, 'Only admins can remove members', 403);
+    }
+
+    const { error } = await supabase
+      .from('group_members')
+      .delete()
+      .eq('group_id', groupId)
+      .eq('user_id', targetUserId);
+
+    if (error) return errorResponse(res, 'Failed to remove member', 500);
+    return successResponse(res, null, 'Member removed successfully');
+  } catch (error) {
+    console.error('removeMember error:', error);
+    return errorResponse(res, 'Internal server error', 500);
+  }
+}
+
+// Update a member's role
+export async function updateMemberRole(req, res) {
+  try {
+    const { id: groupId, userId: targetUserId } = req.params;
+    const { role } = req.body;
+    const requesterId = req.user.id;
+
+    // Basic admin check
+    const { data: adminCheck } = await supabase
+      .from('group_members')
+      .select('role')
+      .eq('group_id', groupId)
+      .eq('user_id', requesterId)
+      .maybeSingle();
+
+    if (!adminCheck || adminCheck.role !== 'admin') {
+      return errorResponse(res, 'Only admins can update roles', 403);
+    }
+
+    const { error } = await supabase
+      .from('group_members')
+      .update({ role })
+      .eq('group_id', groupId)
+      .eq('user_id', targetUserId);
+
+    if (error) return errorResponse(res, 'Failed to update member role', 500);
+    return successResponse(res, null, 'Member role updated successfully');
+  } catch (error) {
+    console.error('updateMemberRole error:', error);
+    return errorResponse(res, 'Internal server error', 500);
+  }
+}
