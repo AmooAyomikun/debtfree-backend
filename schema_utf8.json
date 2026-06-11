@@ -1,0 +1,572 @@
+﻿{
+    "groups":  {
+                   "required":  [
+                                    "id",
+                                    "name",
+                                    "type"
+                                ],
+                   "properties":  {
+                                      "id":  {
+                                                 "default":  "gen_random_uuid()",
+                                                 "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                 "format":  "uuid",
+                                                 "type":  "string"
+                                             },
+                                      "name":  {
+                                                   "format":  "text",
+                                                   "type":  "string"
+                                               },
+                                      "emoji":  {
+                                                    "default":  "👥",
+                                                    "format":  "text",
+                                                    "type":  "string"
+                                                },
+                                      "description":  {
+                                                          "format":  "text",
+                                                          "type":  "string"
+                                                      },
+                                      "type":  {
+                                                   "format":  "text",
+                                                   "type":  "string"
+                                               },
+                                      "created_by":  {
+                                                         "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                         "format":  "uuid",
+                                                         "type":  "string"
+                                                     },
+                                      "invite_code":  {
+                                                          "default":  "substr(md5((random())::text), 0, 9)",
+                                                          "format":  "text",
+                                                          "type":  "string"
+                                                      },
+                                      "created_at":  {
+                                                         "default":  "now()",
+                                                         "format":  "timestamp with time zone",
+                                                         "type":  "string"
+                                                     }
+                                  },
+                   "type":  "object"
+               },
+    "circles":  {
+                    "required":  [
+                                     "id",
+                                     "contribution_amount",
+                                     "frequency"
+                                 ],
+                    "properties":  {
+                                       "id":  {
+                                                  "default":  "gen_random_uuid()",
+                                                  "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                  "format":  "uuid",
+                                                  "type":  "string"
+                                              },
+                                       "group_id":  {
+                                                        "description":  "Note:\nThis is a Foreign Key to `groups.id`.\u003cfk table=\u0027groups\u0027 column=\u0027id\u0027/\u003e",
+                                                        "format":  "uuid",
+                                                        "type":  "string"
+                                                    },
+                                       "contribution_amount":  {
+                                                                   "format":  "numeric",
+                                                                   "type":  "number"
+                                                               },
+                                       "frequency":  {
+                                                         "format":  "text",
+                                                         "type":  "string"
+                                                     },
+                                       "total_members":  {
+                                                             "format":  "integer",
+                                                             "type":  "integer"
+                                                         },
+                                       "current_cycle":  {
+                                                             "default":  1,
+                                                             "format":  "integer",
+                                                             "type":  "integer"
+                                                         },
+                                       "payout_order":  {
+                                                            "default":  "fixed",
+                                                            "format":  "text",
+                                                            "type":  "string"
+                                                        },
+                                       "start_date":  {
+                                                          "format":  "date",
+                                                          "type":  "string"
+                                                      },
+                                       "status":  {
+                                                      "default":  "active",
+                                                      "format":  "text",
+                                                      "type":  "string"
+                                                  },
+                                       "created_at":  {
+                                                          "default":  "now()",
+                                                          "format":  "timestamp with time zone",
+                                                          "type":  "string"
+                                                      }
+                                   },
+                    "type":  "object"
+                },
+    "profiles":  {
+                     "required":  [
+                                      "id"
+                                  ],
+                     "properties":  {
+                                        "id":  {
+                                                   "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                   "format":  "uuid",
+                                                   "type":  "string"
+                                               },
+                                        "full_name":  {
+                                                          "format":  "text",
+                                                          "type":  "string"
+                                                      },
+                                        "phone":  {
+                                                      "format":  "text",
+                                                      "type":  "string"
+                                                  },
+                                        "avatar_url":  {
+                                                           "format":  "text",
+                                                           "type":  "string"
+                                                       },
+                                        "preferred_currency":  {
+                                                                   "default":  "NGN",
+                                                                   "format":  "text",
+                                                                   "type":  "string"
+                                                               },
+                                        "use_case":  {
+                                                         "format":  "text[]",
+                                                         "items":  {
+                                                                       "type":  "string"
+                                                                   },
+                                                         "type":  "array"
+                                                     },
+                                        "wallet_balance":  {
+                                                               "default":  0,
+                                                               "format":  "numeric",
+                                                               "type":  "number"
+                                                           },
+                                        "credit_score":  {
+                                                             "default":  500,
+                                                             "format":  "integer",
+                                                             "type":  "integer"
+                                                         },
+                                        "is_verified":  {
+                                                            "default":  false,
+                                                            "format":  "boolean",
+                                                            "type":  "boolean"
+                                                        },
+                                        "onboarded":  {
+                                                          "default":  false,
+                                                          "format":  "boolean",
+                                                          "type":  "boolean"
+                                                      },
+                                        "created_at":  {
+                                                           "default":  "now()",
+                                                           "format":  "timestamp with time zone",
+                                                           "type":  "string"
+                                                       },
+                                        "fcm_token":  {
+                                                          "format":  "text",
+                                                          "type":  "string"
+                                                      },
+                                        "email":  {
+                                                      "format":  "text",
+                                                      "type":  "string"
+                                                  }
+                                    },
+                     "type":  "object"
+                 },
+    "activity_logs":  {
+                          "required":  [
+                                           "id"
+                                       ],
+                          "properties":  {
+                                             "id":  {
+                                                        "default":  "gen_random_uuid()",
+                                                        "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                        "format":  "uuid",
+                                                        "type":  "string"
+                                                    },
+                                             "group_id":  {
+                                                              "description":  "Note:\nThis is a Foreign Key to `groups.id`.\u003cfk table=\u0027groups\u0027 column=\u0027id\u0027/\u003e",
+                                                              "format":  "uuid",
+                                                              "type":  "string"
+                                                          },
+                                             "user_id":  {
+                                                             "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                             "format":  "uuid",
+                                                             "type":  "string"
+                                                         },
+                                             "action":  {
+                                                            "format":  "text",
+                                                            "type":  "string"
+                                                        },
+                                             "metadata":  {
+                                                              "format":  "jsonb"
+                                                          },
+                                             "created_at":  {
+                                                                "default":  "now()",
+                                                                "format":  "timestamp with time zone",
+                                                                "type":  "string"
+                                                            }
+                                         },
+                          "type":  "object"
+                      },
+    "expense_splits":  {
+                           "required":  [
+                                            "id",
+                                            "amount"
+                                        ],
+                           "properties":  {
+                                              "id":  {
+                                                         "default":  "gen_random_uuid()",
+                                                         "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                         "format":  "uuid",
+                                                         "type":  "string"
+                                                     },
+                                              "expense_id":  {
+                                                                 "description":  "Note:\nThis is a Foreign Key to `expenses.id`.\u003cfk table=\u0027expenses\u0027 column=\u0027id\u0027/\u003e",
+                                                                 "format":  "uuid",
+                                                                 "type":  "string"
+                                                             },
+                                              "user_id":  {
+                                                              "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                              "format":  "uuid",
+                                                              "type":  "string"
+                                                          },
+                                              "amount":  {
+                                                             "format":  "numeric",
+                                                             "type":  "number"
+                                                         },
+                                              "is_settled":  {
+                                                                 "default":  false,
+                                                                 "format":  "boolean",
+                                                                 "type":  "boolean"
+                                                             },
+                                              "settled_at":  {
+                                                                 "format":  "timestamp with time zone",
+                                                                 "type":  "string"
+                                                             }
+                                          },
+                           "type":  "object"
+                       },
+    "contributions":  {
+                          "required":  [
+                                           "id",
+                                           "amount"
+                                       ],
+                          "properties":  {
+                                             "id":  {
+                                                        "default":  "gen_random_uuid()",
+                                                        "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                        "format":  "uuid",
+                                                        "type":  "string"
+                                                    },
+                                             "circle_id":  {
+                                                               "description":  "Note:\nThis is a Foreign Key to `circles.id`.\u003cfk table=\u0027circles\u0027 column=\u0027id\u0027/\u003e",
+                                                               "format":  "uuid",
+                                                               "type":  "string"
+                                                           },
+                                             "user_id":  {
+                                                             "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                             "format":  "uuid",
+                                                             "type":  "string"
+                                                         },
+                                             "amount":  {
+                                                            "format":  "numeric",
+                                                            "type":  "number"
+                                                        },
+                                             "cycle_number":  {
+                                                                  "format":  "integer",
+                                                                  "type":  "integer"
+                                                              },
+                                             "status":  {
+                                                            "default":  "pending",
+                                                            "format":  "text",
+                                                            "type":  "string"
+                                                        },
+                                             "paid_at":  {
+                                                             "format":  "timestamp with time zone",
+                                                             "type":  "string"
+                                                         },
+                                             "payment_reference":  {
+                                                                       "format":  "text",
+                                                                       "type":  "string"
+                                                                   }
+                                         },
+                          "type":  "object"
+                      },
+    "circle_members":  {
+                           "required":  [
+                                            "id"
+                                        ],
+                           "properties":  {
+                                              "id":  {
+                                                         "default":  "gen_random_uuid()",
+                                                         "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                         "format":  "uuid",
+                                                         "type":  "string"
+                                                     },
+                                              "circle_id":  {
+                                                                "description":  "Note:\nThis is a Foreign Key to `circles.id`.\u003cfk table=\u0027circles\u0027 column=\u0027id\u0027/\u003e",
+                                                                "format":  "uuid",
+                                                                "type":  "string"
+                                                            },
+                                              "user_id":  {
+                                                              "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                              "format":  "uuid",
+                                                              "type":  "string"
+                                                          },
+                                              "position":  {
+                                                               "format":  "integer",
+                                                               "type":  "integer"
+                                                           },
+                                              "has_received":  {
+                                                                   "default":  false,
+                                                                   "format":  "boolean",
+                                                                   "type":  "boolean"
+                                                               },
+                                              "received_at":  {
+                                                                  "format":  "timestamp with time zone",
+                                                                  "type":  "string"
+                                                              }
+                                          },
+                           "type":  "object"
+                       },
+    "settlements":  {
+                        "required":  [
+                                         "id",
+                                         "amount"
+                                     ],
+                        "properties":  {
+                                           "id":  {
+                                                      "default":  "gen_random_uuid()",
+                                                      "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                      "format":  "uuid",
+                                                      "type":  "string"
+                                                  },
+                                           "group_id":  {
+                                                            "description":  "Note:\nThis is a Foreign Key to `groups.id`.\u003cfk table=\u0027groups\u0027 column=\u0027id\u0027/\u003e",
+                                                            "format":  "uuid",
+                                                            "type":  "string"
+                                                        },
+                                           "from_user":  {
+                                                             "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                             "format":  "uuid",
+                                                             "type":  "string"
+                                                         },
+                                           "to_user":  {
+                                                           "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                           "format":  "uuid",
+                                                           "type":  "string"
+                                                       },
+                                           "amount":  {
+                                                          "format":  "numeric",
+                                                          "type":  "number"
+                                                      },
+                                           "method":  {
+                                                          "format":  "text",
+                                                          "type":  "string"
+                                                      },
+                                           "status":  {
+                                                          "default":  "pending",
+                                                          "format":  "text",
+                                                          "type":  "string"
+                                                      },
+                                           "created_at":  {
+                                                              "default":  "now()",
+                                                              "format":  "timestamp with time zone",
+                                                              "type":  "string"
+                                                          }
+                                       },
+                        "type":  "object"
+                    },
+    "expenses":  {
+                     "required":  [
+                                      "id",
+                                      "title",
+                                      "amount"
+                                  ],
+                     "properties":  {
+                                        "id":  {
+                                                   "default":  "gen_random_uuid()",
+                                                   "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                   "format":  "uuid",
+                                                   "type":  "string"
+                                               },
+                                        "group_id":  {
+                                                         "description":  "Note:\nThis is a Foreign Key to `groups.id`.\u003cfk table=\u0027groups\u0027 column=\u0027id\u0027/\u003e",
+                                                         "format":  "uuid",
+                                                         "type":  "string"
+                                                     },
+                                        "title":  {
+                                                      "format":  "text",
+                                                      "type":  "string"
+                                                  },
+                                        "amount":  {
+                                                       "format":  "numeric",
+                                                       "type":  "number"
+                                                   },
+                                        "category":  {
+                                                         "format":  "text",
+                                                         "type":  "string"
+                                                     },
+                                        "paid_by":  {
+                                                        "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                        "format":  "uuid",
+                                                        "type":  "string"
+                                                    },
+                                        "split_method":  {
+                                                             "default":  "equal",
+                                                             "format":  "text",
+                                                             "type":  "string"
+                                                         },
+                                        "receipt_url":  {
+                                                            "format":  "text",
+                                                            "type":  "string"
+                                                        },
+                                        "note":  {
+                                                     "format":  "text",
+                                                     "type":  "string"
+                                                 },
+                                        "created_at":  {
+                                                           "default":  "now()",
+                                                           "format":  "timestamp with time zone",
+                                                           "type":  "string"
+                                                       }
+                                    },
+                     "type":  "object"
+                 },
+    "wallet_transactions":  {
+                                "required":  [
+                                                 "id",
+                                                 "type",
+                                                 "amount"
+                                             ],
+                                "properties":  {
+                                                   "id":  {
+                                                              "default":  "gen_random_uuid()",
+                                                              "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                              "format":  "uuid",
+                                                              "type":  "string"
+                                                          },
+                                                   "user_id":  {
+                                                                   "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                                   "format":  "uuid",
+                                                                   "type":  "string"
+                                                               },
+                                                   "type":  {
+                                                                "format":  "text",
+                                                                "type":  "string"
+                                                            },
+                                                   "amount":  {
+                                                                  "format":  "numeric",
+                                                                  "type":  "number"
+                                                              },
+                                                   "description":  {
+                                                                       "format":  "text",
+                                                                       "type":  "string"
+                                                                   },
+                                                   "reference":  {
+                                                                     "format":  "text",
+                                                                     "type":  "string"
+                                                                 },
+                                                   "status":  {
+                                                                  "default":  "success",
+                                                                  "format":  "text",
+                                                                  "type":  "string"
+                                                              },
+                                                   "metadata":  {
+                                                                    "format":  "jsonb"
+                                                                },
+                                                   "created_at":  {
+                                                                      "default":  "now()",
+                                                                      "format":  "timestamp with time zone",
+                                                                      "type":  "string"
+                                                                  },
+                                                   "payment_method":  {
+                                                                          "default":  "card",
+                                                                          "format":  "text",
+                                                                          "type":  "string"
+                                                                      }
+                                               },
+                                "type":  "object"
+                            },
+    "group_members":  {
+                          "required":  [
+                                           "id"
+                                       ],
+                          "properties":  {
+                                             "id":  {
+                                                        "default":  "gen_random_uuid()",
+                                                        "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                        "format":  "uuid",
+                                                        "type":  "string"
+                                                    },
+                                             "group_id":  {
+                                                              "description":  "Note:\nThis is a Foreign Key to `groups.id`.\u003cfk table=\u0027groups\u0027 column=\u0027id\u0027/\u003e",
+                                                              "format":  "uuid",
+                                                              "type":  "string"
+                                                          },
+                                             "user_id":  {
+                                                             "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                             "format":  "uuid",
+                                                             "type":  "string"
+                                                         },
+                                             "role":  {
+                                                          "default":  "member",
+                                                          "format":  "text",
+                                                          "type":  "string"
+                                                      },
+                                             "joined_at":  {
+                                                               "default":  "now()",
+                                                               "format":  "timestamp with time zone",
+                                                               "type":  "string"
+                                                           }
+                                         },
+                          "type":  "object"
+                      },
+    "notifications":  {
+                          "required":  [
+                                           "id"
+                                       ],
+                          "properties":  {
+                                             "id":  {
+                                                        "default":  "gen_random_uuid()",
+                                                        "description":  "Note:\nThis is a Primary Key.\u003cpk/\u003e",
+                                                        "format":  "uuid",
+                                                        "type":  "string"
+                                                    },
+                                             "user_id":  {
+                                                             "description":  "Note:\nThis is a Foreign Key to `profiles.id`.\u003cfk table=\u0027profiles\u0027 column=\u0027id\u0027/\u003e",
+                                                             "format":  "uuid",
+                                                             "type":  "string"
+                                                         },
+                                             "type":  {
+                                                          "format":  "text",
+                                                          "type":  "string"
+                                                      },
+                                             "title":  {
+                                                           "format":  "text",
+                                                           "type":  "string"
+                                                       },
+                                             "message":  {
+                                                             "format":  "text",
+                                                             "type":  "string"
+                                                         },
+                                             "is_read":  {
+                                                             "default":  false,
+                                                             "format":  "boolean",
+                                                             "type":  "boolean"
+                                                         },
+                                             "action_url":  {
+                                                                "format":  "text",
+                                                                "type":  "string"
+                                                            },
+                                             "created_at":  {
+                                                                "default":  "now()",
+                                                                "format":  "timestamp with time zone",
+                                                                "type":  "string"
+                                                            }
+                                         },
+                          "type":  "object"
+                      }
+}
