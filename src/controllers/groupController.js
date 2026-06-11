@@ -449,6 +449,7 @@ export async function getGroupDetail(req, res) {
       amount: Number(e.amount),
       date: e.date || e.created_at?.split('T')[0],
       category: e.category || 'other',
+      isFlagged: e.is_flagged || false,
       paidBy: e.paid_by,
       splits: (e.expense_splits || []).map((s) => ({
         id: s.id,
@@ -551,6 +552,7 @@ export async function getGroupDetail(req, res) {
       currency: g.currency || 'NGN',
       description: g.description || '',
       type: g.type || 'expense',
+      status: g.status || 'active',
       inviteCode: g.invite_code,
       createdAt: g.created_at,
       members,
@@ -643,6 +645,14 @@ export async function joinGroupByInviteCode(req, res) {
       console.error('Error inserting member:', insertErr);
       return errorResponse(res, 'Failed to join group', 500);
     }
+
+    // Add activity log
+    await supabase.from('activity_logs').insert({
+      group_id: dbGroup.id,
+      user_id: userId,
+      action: 'member_added',
+      metadata: {}
+    });
 
     return successResponse(res, dbGroup, 'Joined group successfully');
   } catch (error) {
@@ -752,12 +762,10 @@ export async function addExpense(req, res) {
 
     // 3. Create activity log entry
     await supabase.from('activity_logs').insert({
+      group_id: groupId,
       user_id: userId,
-      type: 'expense',
-      description: `Added "${expenseRow.title}" expense`,
-      group_name: groupName || 'Group Expense',
-      amount: -expenseRow.amount,
-      is_positive: false
+      action: 'expense_added',
+      metadata: { title: expenseRow.title, amount: expenseRow.amount }
     });
 
     return successResponse(res, { id: insertedExpense.id }, 'Expense added successfully');

@@ -19,6 +19,16 @@ import {
   updateMemberRole
 } from '../controllers/groupController.js';
 
+import {
+  removeMember as removeMemberAdmin,
+  pauseGroup,
+  resumeGroup,
+  closeGroup,
+  flagExpense,
+  dismissExpenseFlag,
+  getGroupActivity
+} from '../controllers/adminController.js';
+
 const router = Router();
 
 // Public route: fetch invite details before logging in/joining if needed
@@ -49,5 +59,14 @@ router.post('/:id/settlements', generalLimiter, addSettlement);
 // Savings Circles
 router.post('/:id/contributions', generalLimiter, recordContribution);
 router.post('/:id/payouts', generalLimiter, recordPayout);
+
+// Admin Controls & Dispute Resolution
+router.post('/:id/remove-member', generalLimiter, removeMemberAdmin);
+router.post('/:id/pause', generalLimiter, pauseGroup);
+router.post('/:id/resume', generalLimiter, resumeGroup);
+router.post('/:id/close', generalLimiter, closeGroup);
+router.post('/:id/expenses/:expenseId/flag', generalLimiter, flagExpense);
+router.post('/:id/expenses/:expenseId/dismiss-flag', generalLimiter, dismissExpenseFlag);
+router.get('/:id/activity', generalLimiter, getGroupActivity);
 
 export default router;
