@@ -11,6 +11,7 @@ import notificationsRouter from './src/routes/notificationRoutes.js';
 import userRouter from './src/routes/userRoutes.js';
 import groupRouter from './src/routes/groupRoutes.js';
 import kycRouter from './src/routes/kycRoutes.js';
+import creditRouter from './src/routes/creditRoutes.js';
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/users', userRouter);
 app.use('/api/groups', groupRouter);
 app.use('/api/kyc', kycRouter);
+app.use('/api/credit', creditRouter);
 
 // 404 handler
 app.use('{*any}', (req, res) => {

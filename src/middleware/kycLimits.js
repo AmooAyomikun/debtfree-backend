@@ -38,13 +38,16 @@ export const checkKYCLimits = async (req, res, next) => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     
-    // Fetch user's wallet transactions for the current month
-    // We only sum 'credit' (funding) and 'debit' (payments/settlements) that are 'success'
+    const isFunding = req.originalUrl.includes('/initialize');
+    const txTypes = isFunding ? ['credit', 'received'] : ['debit', 'sent'];
+
+    // Fetch user's wallet transactions of corresponding types for the current month
     const { data: transactions, error: txError } = await supabase
       .from('wallet_transactions')
-      .select('amount, type')
+      .select('amount')
       .eq('user_id', user.id)
-      .eq('status', 'success')
+      .in('type', txTypes)
+      .in('status', ['success', 'completed'])
       .gte('created_at', startOfMonth);
 
     if (txError) {
@@ -57,9 +60,10 @@ export const checkKYCLimits = async (req, res, next) => {
 
     // Check if the requested amount pushes them over the limit
     if (currentMonthTotal + Number(requestedAmount) > tierLimit) {
+      const actionWord = isFunding ? 'Funding' : 'Transaction';
       return errorResponse(
         res,
-        `Transaction exceeds your monthly limit of ₦${tierLimit.toLocaleString()}. You have already used ₦${currentMonthTotal.toLocaleString()} this month. Please upgrade your KYC tier to increase your limit.`,
+        `${actionWord} exceeds your monthly limit of ₦${tierLimit.toLocaleString()}. You have already used ₦${currentMonthTotal.toLocaleString()} this month. Please upgrade your KYC tier to increase your limit.`,
         403
       );
     }
