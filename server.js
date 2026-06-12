@@ -25,8 +25,18 @@ app.use(express.urlencoded({ extended: true }));
 
 // Security
 app.use(helmet());
+
+const allowedOrigins = NODE_ENV === 'development'
+  ? [FRONTEND_URL, 'http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'].filter(Boolean)
+  : [FRONTEND_URL].filter(Boolean);
+
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, health checks)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS policy: origin ${origin} is not allowed`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -58,7 +68,7 @@ app.use('/api/kyc', kycRouter);
 app.use('/api/credit', creditRouter);
 
 // 404 handler
-app.use('{*any}', (req, res) => {
+app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
 

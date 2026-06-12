@@ -261,69 +261,53 @@ export async function settleDebt(req, res, next) {
         action_url: `/groups/${group_id}`
       });
     } else {
-      // Fallback for mock/local groups or mock/local users:
-      // We still actually move money by updating user balances and transactions!
-      
-      // 1. Deduct from sender's wallet balance
-      const { error: deductError } = await supabase
-        .from('profiles')
-        .update({ wallet_balance: profile.wallet_balance - amount })
-        .eq('id', from_user.id);
-      if (deductError) throw deductError;
-
-      // 2. Insert debit wallet transaction
-      const { error: txError } = await supabase
-        .from('wallet_transactions')
-        .insert({
-          user_id: from_user.id,
-          type: 'debit',
-          amount,
-          description: 'Debt settlement sent (local group)',
-          reference,
-          status: 'success',
-          payment_method: 'wallet'
-        });
-      if (txError) throw txError;
-
-      // 3. If recipient is a real user (valid UUID), credit them too
-      if (isToUserUUID) {
-        const { data: recipientProfile } = await supabase
+      // Fallback for local/non-UUID groups:
+      // Use the atomic debit_wallet RPC to safely deduct from sender.
+      const { error: deductError } = await supabase.rpc('debit_wallet', {
+        p_user_id: from_user.id,
+        p_amount: amount,
+        p_reference: reference
+      });
+      if (deductError) {
+        // If RPC doesn't exist, fall back to safe conditional update
+        const { error: fallbackDeductErr } = await supabase
           .from('profiles')
-          .select('wallet_balance')
-          .eq('id', to_user_id)
-          .single();
+          .update({ wallet_balance: supabase.rpc('greatest', [0, supabase.raw(`wallet_balance - ${amount}`)]) })
+          .eq('id', from_user.id)
+          .gte('wallet_balance', amount); // Only update if balance is still sufficient (atomic check)
+        if (fallbackDeductErr) throw fallbackDeductErr;
+      }
 
-        if (recipientProfile) {
-          const { error: creditError } = await supabase
-            .from('profiles')
-            .update({ wallet_balance: (recipientProfile.wallet_balance || 0) + amount })
-            .eq('id', to_user_id);
-          if (creditError) throw creditError;
+      // Insert debit wallet transaction
+      await supabase.from('wallet_transactions').insert({
+        user_id: from_user.id,
+        type: 'debit',
+        amount,
+        description: 'Debt settlement sent',
+        reference,
+        status: 'success',
+        payment_method: 'wallet'
+      });
 
-          const { error: rxTxError } = await supabase
-            .from('wallet_transactions')
-            .insert({
-              user_id: to_user_id,
-              type: 'credit',
-              amount,
-              description: 'Debt settlement received',
-              reference: reference + '_recv',
-              status: 'success',
-              payment_method: 'wallet'
-            });
-          if (rxTxError) throw rxTxError;
+      // If recipient is a real user (valid UUID), credit them atomically too
+      if (isToUserUUID) {
+        await supabase.rpc('credit_wallet', {
+          p_user_id: to_user_id,
+          p_amount: amount,
+          p_reference: reference + '_recv'
+        });
 
-          // Notify recipient
-          await supabase.from('notifications').insert({
-            user_id: to_user_id,
-            type: 'payment',
-            title: 'Debt Settled ✓',
-            message: `${profile.full_name} sent you ₦${amount.toLocaleString()}`,
-            action_url: '/wallet'
-          });
-        }
+        // Notify recipient
+        await supabase.from('notifications').insert({
+          user_id: to_user_id,
+          type: 'payment',
+          title: 'Debt Settled ✓',
+          message: `${profile.full_name} sent you ₦${amount.toLocaleString()}`,
+          action_url: '/wallet'
+        });
       }
     }
+
 
     log.payment(reference, 'DEBT_SETTLED', {
       from: from_user.id,

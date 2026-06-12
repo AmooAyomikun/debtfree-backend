@@ -1,5 +1,7 @@
+import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
 import { successResponse, errorResponse } from '../utils/response.js';
+import { log } from '../utils/logger.js';
 
 // Helper to format savings circle nested structure for the frontend
 function formatSavingsCircle(circle, circleMembers, contributions) {
@@ -343,7 +345,7 @@ export async function createGroup(req, res) {
       }
     }
 
-    return successResponse(res, insertedGroup, 'Group created successfully', 211);
+    return successResponse(res, insertedGroup, 'Group created successfully', 201);
   } catch (error) {
     console.error('createGroup error:', error);
     return errorResponse(res, 'Internal server error', 500);
@@ -671,32 +673,35 @@ export async function deleteGroup(req, res) {
     const groupId = req.params.id;
     const userId = req.user.id;
 
-    // Check if user is admin of group
-    const { data: isMember, error: checkErr } = await supabase
+    // Verify user is an admin of the group
+    const { data: membership, error: checkErr } = await supabase
       .from('group_members')
       .select('role')
       .eq('group_id', groupId)
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (checkErr || !isMember) {
-      return errorResponse(res, 'Failed to authorize deletion or not a member', 403);
+    if (checkErr || !membership) {
+      return errorResponse(res, 'You are not a member of this group', 403);
     }
 
-    // For simplicity, allow any member to delete or check for admin role
+    if (membership.role !== 'admin') {
+      return errorResponse(res, 'Only group admins can delete a group', 403);
+    }
+
     const { error: deleteErr } = await supabase
       .from('groups')
       .delete()
       .eq('id', groupId);
 
     if (deleteErr) {
-      console.error('Error deleting group:', deleteErr);
+      log.error('Error deleting group', deleteErr);
       return errorResponse(res, 'Failed to delete group', 500);
     }
 
     return successResponse(res, null, 'Group deleted successfully');
   } catch (error) {
-    console.error('deleteGroup error:', error);
+    log.error('deleteGroup error', error);
     return errorResponse(res, 'Internal server error', 500);
   }
 }
@@ -725,9 +730,9 @@ export async function addExpense(req, res) {
 
     if (date) {
       try {
-        expenseRow.created_at = new Date(date).toISOString();
+        expenseRow.date = new Date(date).toISOString().split('T')[0];
       } catch (err) {
-        console.error('Invalid date format:', date);
+        log.error('Invalid date format for expense', { date });
       }
     }
 
@@ -850,10 +855,14 @@ export async function addSettlement(req, res) {
   try {
     const groupId = req.params.id;
     const userId = req.user.id;
-    const { from, to, amount, method, date, groupName } = req.body;
+    const { from, to, amount, method } = req.body;
 
     if (!from || !to || !amount) {
       return errorResponse(res, 'Sender, recipient, and amount are required', 400);
+    }
+
+    if (Number(amount) <= 0) {
+      return errorResponse(res, 'Settlement amount must be greater than zero', 400);
     }
 
     const settlementRow = {
@@ -866,28 +875,28 @@ export async function addSettlement(req, res) {
     };
 
     // 1. Insert settlement
-    const { error: settleErr } = await supabase
+    const { data: insertedSettlement, error: settleErr } = await supabase
       .from('settlements')
-      .insert(settlementRow);
+      .insert(settlementRow)
+      .select()
+      .single();
 
     if (settleErr) {
-      console.error('Error inserting settlement:', settleErr);
+      log.error('Error inserting settlement', settleErr);
       return errorResponse(res, 'Failed to add settlement', 500);
     }
 
-    // 2. Create activity log entry
+    // 2. Create activity log entry with correct schema
     await supabase.from('activity_logs').insert({
+      group_id: groupId,
       user_id: userId,
-      type: 'expense',
-      description: `Settled debt of ₦${Number(amount).toLocaleString()}`,
-      group_name: groupName || 'Group Settlement',
-      amount: Number(amount),
-      is_positive: true
+      action: 'debt_settled',
+      metadata: { amount: Number(amount), from_user: from, to_user: to }
     });
 
-    return successResponse(res, null, 'Settlement recorded successfully');
+    return successResponse(res, { id: insertedSettlement.id }, 'Settlement recorded successfully');
   } catch (error) {
-    console.error('addSettlement error:', error);
+    log.error('addSettlement error', error);
     return errorResponse(res, 'Internal server error', 500);
   }
 }
@@ -1020,7 +1029,20 @@ export async function recordContribution(req, res) {
 export async function recordPayout(req, res) {
   try {
     const groupId = req.params.id;
+    const userId = req.user.id;
     const { cycleNumber, date } = req.body;
+
+    // Admin-only action
+    const { data: adminCheck } = await supabase
+      .from('group_members')
+      .select('role')
+      .eq('group_id', groupId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!adminCheck || adminCheck.role !== 'admin') {
+      return errorResponse(res, 'Only group admins can record payouts', 403);
+    }
 
     // 1. Fetch the circle for this group
     const { data: circle, error: circleErr } = await supabase
@@ -1111,7 +1133,18 @@ export async function updateMemberRole(req, res) {
     const { role } = req.body;
     const requesterId = req.user.id;
 
-    // Basic admin check
+    // Whitelist allowed roles
+    const ALLOWED_ROLES = ['admin', 'member'];
+    if (!role || !ALLOWED_ROLES.includes(role)) {
+      return errorResponse(res, `Role must be one of: ${ALLOWED_ROLES.join(', ')}`, 400);
+    }
+
+    // Prevent self-demotion (admins cannot demote themselves)
+    if (targetUserId === requesterId && role !== 'admin') {
+      return errorResponse(res, 'You cannot change your own admin role', 403);
+    }
+
+    // Admin check
     const { data: adminCheck } = await supabase
       .from('group_members')
       .select('role')
@@ -1120,7 +1153,7 @@ export async function updateMemberRole(req, res) {
       .maybeSingle();
 
     if (!adminCheck || adminCheck.role !== 'admin') {
-      return errorResponse(res, 'Only admins can update roles', 403);
+      return errorResponse(res, 'Only admins can update member roles', 403);
     }
 
     const { error } = await supabase
@@ -1130,9 +1163,17 @@ export async function updateMemberRole(req, res) {
       .eq('user_id', targetUserId);
 
     if (error) return errorResponse(res, 'Failed to update member role', 500);
+
+    await supabase.from('activity_logs').insert({
+      group_id: groupId,
+      user_id: requesterId,
+      action: 'member_role_updated',
+      metadata: { target_user_id: targetUserId, new_role: role }
+    });
+
     return successResponse(res, null, 'Member role updated successfully');
   } catch (error) {
-    console.error('updateMemberRole error:', error);
+    log.error('updateMemberRole error', error);
     return errorResponse(res, 'Internal server error', 500);
   }
 }
