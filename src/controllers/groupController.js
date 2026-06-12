@@ -96,7 +96,7 @@ export async function getGroups(req, res) {
         expenses (
           id,
           title,
-          description,
+          note,
           amount,
           category,
           is_flagged,
@@ -168,7 +168,7 @@ export async function getGroups(req, res) {
 
       const expenses = (g.expenses || []).map((e) => ({
         id: e.id,
-        title: e.title || e.description,
+        title: e.title || e.note,
         amount: Number(e.amount),
         date: e.date || e.created_at?.split('T')[0],
         createdAt: e.created_at,
