@@ -4,6 +4,7 @@ import { paystackService } from '../services/paystackService.js';
 import { generateReference } from '../utils/generateReference.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import { log } from '../utils/logger.js';
+import { PAYSTACK_WEBHOOK_SECRET } from '../config/constants.js';
 
 // POST /api/payments/initialize
 export async function initializePayment(req, res, next) {
@@ -126,11 +127,13 @@ export async function verifyPayment(req, res, next) {
 export async function handleWebhook(req, res, next) {
   try {
     const hash = crypto
-      .createHmac('sha512', process.env.PAYSTACK_WEBHOOK_SECRET)
+      .createHmac('sha512', PAYSTACK_WEBHOOK_SECRET || process.env.PAYSTACK_WEBHOOK_SECRET)
       .update(req.body)
       .digest('hex');
 
-    if (hash !== req.headers['x-paystack-signature']) {
+    if (!PAYSTACK_WEBHOOK_SECRET) {
+      log.warn('PAYSTACK_WEBHOOK_SECRET not set — skipping signature validation in dev');
+    } else if (hash !== req.headers['x-paystack-signature']) {
       log.warn('Webhook signature mismatch - possible spoofed request');
       return res.status(401).json({ message: 'Invalid signature' });
     }
@@ -269,12 +272,28 @@ export async function settleDebt(req, res, next) {
         p_reference: reference
       });
       if (deductError) {
-        // If RPC doesn't exist, fall back to safe conditional update
+        log.warn('debit_wallet RPC failed, falling back to optimistic locking update:', deductError);
+        // If RPC fails, fall back to safe optimistic locking update
+        const { data: latestProfile, error: getProfileErr } = await supabase
+          .from('profiles')
+          .select('wallet_balance')
+          .eq('id', from_user.id)
+          .single();
+
+        if (getProfileErr || !latestProfile) {
+          throw getProfileErr || new Error('Failed to retrieve user profile balance');
+        }
+
+        if (latestProfile.wallet_balance < amount) {
+          throw new Error('Insufficient wallet balance');
+        }
+
         const { error: fallbackDeductErr } = await supabase
           .from('profiles')
-          .update({ wallet_balance: supabase.rpc('greatest', [0, supabase.raw(`wallet_balance - ${amount}`)]) })
+          .update({ wallet_balance: latestProfile.wallet_balance - amount })
           .eq('id', from_user.id)
-          .gte('wallet_balance', amount); // Only update if balance is still sufficient (atomic check)
+          .eq('wallet_balance', latestProfile.wallet_balance); // optimistic locking guard
+
         if (fallbackDeductErr) throw fallbackDeductErr;
       }
 

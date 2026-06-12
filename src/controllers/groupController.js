@@ -78,7 +78,7 @@ export async function getGroups(req, res) {
 
     const groupIds = [...new Set(memberRows.map(r => r.group_id).filter(Boolean))];
 
-    // 2. Fetch those groups along with their members and their profiles
+    // 2. Fetch those groups along with their members, profiles, expenses, expense_splits, and settlements
     const { data: groupRows, error: groupErr } = await supabase
       .from('groups')
       .select(`
@@ -92,6 +92,32 @@ export async function getGroups(req, res) {
             avatar_url,
             email
           )
+        ),
+        expenses (
+          id,
+          title,
+          description,
+          amount,
+          category,
+          is_flagged,
+          paid_by,
+          date,
+          created_at,
+          expense_splits (
+            id,
+            expense_id,
+            user_id,
+            amount,
+            is_settled
+          )
+        ),
+        settlements (
+          id,
+          from_user,
+          to_user,
+          amount,
+          method,
+          created_at
         )
       `)
       .in('id', groupIds);
@@ -130,6 +156,43 @@ export async function getGroups(req, res) {
     const formattedGroups = await Promise.all((groupRows || []).map(async (g) => {
       const circle = (circlesRows || []).find(c => c.group_id === g.id);
       let savings_circle = null;
+
+      const members = (g.group_members || []).map((m) => ({
+        userId: m.user_id,
+        role: m.role,
+        name: m.profiles?.full_name || 'User',
+        avatarColor: '#16a34a',
+        avatar: m.profiles?.avatar_url || null,
+        email: m.profiles?.email || '',
+      }));
+
+      const expenses = (g.expenses || []).map((e) => ({
+        id: e.id,
+        title: e.title || e.description,
+        amount: Number(e.amount),
+        date: e.date || e.created_at?.split('T')[0],
+        createdAt: e.created_at,
+        category: e.category || 'other',
+        isFlagged: e.is_flagged || false,
+        paidBy: e.paid_by,
+        splits: (e.expense_splits || []).map((s) => ({
+          id: s.id,
+          expenseId: s.expense_id,
+          userId: s.user_id,
+          amount: Number(s.amount),
+          isSettled: s.is_settled,
+        })),
+      }));
+
+      const settlements = (g.settlements || []).map((s) => ({
+        id: s.id,
+        from: s.from_user,
+        to: s.to_user,
+        amount: Number(s.amount),
+        method: s.method || 'bank_transfer',
+        date: s.created_at?.split('T')[0],
+      }));
+
       if (circle) {
         const cMembers = circleMembersRows.filter(cm => cm.circle_id === circle.id);
         const cContributions = contributionsRows.filter(c => c.circle_id === circle.id);
@@ -137,7 +200,7 @@ export async function getGroups(req, res) {
       } else if (['savings', 'savings_circle', 'circle'].includes(g.type)) {
         // Auto-heal on list load
         const circleId = crypto.randomUUID();
-        const groupMembersList = (g.group_members || []).map(m => m.user_id);
+        const groupMembersList = members.map(m => m.userId);
         
         const circleRow = {
           id: circleId,
@@ -184,7 +247,19 @@ export async function getGroups(req, res) {
         }
       }
       return {
-        ...g,
+        id: g.id,
+        name: g.name,
+        emoji: g.emoji || 'fa-users',
+        color: g.color || '#16a34a',
+        currency: g.currency || 'NGN',
+        description: g.description || '',
+        type: g.type || 'expense',
+        status: g.status || 'active',
+        inviteCode: g.invite_code,
+        createdAt: g.created_at,
+        members,
+        expenses,
+        settlements,
         savings_circle
       };
     }));

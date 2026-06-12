@@ -8,7 +8,9 @@
 CREATE OR REPLACE FUNCTION debit_wallet(
   p_user_id UUID,
   p_amount NUMERIC,
-  p_reference TEXT
+  p_reference TEXT,
+  p_description TEXT DEFAULT 'Debt settlement sent',
+  p_payment_method TEXT DEFAULT 'wallet'
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -40,7 +42,7 @@ BEGIN
 
   -- Insert transaction record
   INSERT INTO wallet_transactions (user_id, type, amount, description, reference, status, payment_method)
-  VALUES (p_user_id, 'debit', p_amount, 'Debt settlement sent', p_reference, 'success', 'wallet')
+  VALUES (p_user_id, 'debit', p_amount, p_description, p_reference, 'success', p_payment_method)
   ON CONFLICT (reference) DO NOTHING;
 END;
 $$;
