@@ -220,10 +220,13 @@ export async function createGroup(req, res) {
       id: groupId,
       name,
       emoji: emoji || 'fa-users',
+      color: color || '#16a34a',
+      currency: currency || 'NGN',
       type: type || 'expense',
       description: description || '',
       invite_code: autoInviteCode,
-      created_by: userId
+      created_by: userId,
+      status: 'active'
     };
 
     // 1. Insert group details
@@ -576,7 +579,7 @@ export async function getGroupDetailsByInviteCode(req, res) {
 
     const { data: dbGroup, error } = await supabase
       .from('groups')
-      .select('id, name, emoji, color, currency, type, description, invite_code')
+      .select('id, name, emoji, type, description, invite_code, color, currency')
       .eq('invite_code', inviteCode)
       .single();
 
