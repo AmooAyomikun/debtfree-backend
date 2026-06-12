@@ -448,6 +448,7 @@ export async function getGroupDetail(req, res) {
       title: e.title || e.description,
       amount: Number(e.amount),
       date: e.date || e.created_at?.split('T')[0],
+      createdAt: e.created_at,
       category: e.category || 'other',
       isFlagged: e.is_flagged || false,
       paidBy: e.paid_by,

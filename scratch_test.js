@@ -1,31 +1,60 @@
 import 'dotenv/config';
 import { supabase } from './src/config/supabase.js';
 
-async function test() {
+async function testGroupDetail(groupId) {
   try {
-    // Attempt a mock insert with the standard schema columns
-    const { data, error } = await supabase
-      .from('activity_logs')
-      .insert({
-        action: 'test_action',
-        metadata: { info: 'test' }
-      })
-      .select();
+    const { data: isMember, error: checkErr } = await supabase
+      .from('group_members')
+      .select('id')
+      .eq('group_id', groupId);
+    console.log("IsMember check:", isMember, checkErr);
 
-    if (error) {
-      console.error("Insert failed with columns (action, metadata):", error);
-    } else {
-      console.log("Insert succeeded!", data);
-      
-      // Clean up
-      if (data && data[0]) {
-        await supabase.from('activity_logs').delete().eq('id', data[0].id);
-        console.log("Cleanup complete.");
-      }
-    }
+    const { data: g, error: groupErr } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('id', groupId)
+      .single();
+    console.log("Group details:", g, groupErr);
+
+    const { data: membersRows, error: membersErr } = await supabase
+      .from('group_members')
+      .select(`
+        user_id,
+        role,
+        profiles:user_id (
+          id,
+          full_name,
+          avatar_url,
+          email
+        )
+      `)
+      .eq('group_id', groupId);
+    console.log("Members rows:", membersRows, membersErr);
+
+    const { data: expensesRows, error: expensesErr } = await supabase
+      .from('expenses')
+      .select(`
+        *,
+        expense_splits (
+          id,
+          expense_id,
+          user_id,
+          amount,
+          is_settled
+        )
+      `)
+      .eq('group_id', groupId);
+    console.log("Expenses rows:", expensesRows, expensesErr);
+
+    const { data: settlementsRows, error: settlementsErr } = await supabase
+      .from('settlements')
+      .select('*')
+      .eq('group_id', groupId);
+    console.log("Settlements rows:", settlementsRows, settlementsErr);
+
   } catch (err) {
     console.error("Test failed:", err);
   }
 }
 
-test();
+testGroupDetail('252960b5-5ff2-4f43-8bd7-199ce448e85e');
