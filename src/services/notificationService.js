@@ -5,6 +5,11 @@ import { log } from '../utils/logger.js';
 // Send push notification to a single user
 export async function sendPushNotification(userId, { title, body, data = {} }) {
   try {
+    if (!messaging) {
+      log.warn('Firebase messaging not available, skipping push notification');
+      return null;
+    }
+
     // Get user's FCM token from profiles
     const { data: profile } = await supabase
       .from('profiles')
