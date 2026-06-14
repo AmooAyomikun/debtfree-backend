@@ -1,4 +1,6 @@
 import admin from 'firebase-admin';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import { log } from '../utils/logger.js';
 
 let serviceAccount;
@@ -20,13 +22,13 @@ try {
   serviceAccount = null;
 }
 
-if (serviceAccount && !admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+if (serviceAccount && !getApps().length) {
+  initializeApp({
+    credential: cert(serviceAccount),
     projectId: process.env.FIREBASE_PROJECT_ID
   });
   log.info('Firebase Admin initialized successfully');
 }
 
-export const messaging = admin.apps.length ? admin.messaging() : null;
+export const messaging = getApps().length ? getMessaging() : null;
 export default admin;
