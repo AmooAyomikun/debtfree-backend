@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { supabase } from '../config/supabase.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import { log } from '../utils/logger.js';
+import { createNotification } from '../services/notificationService.js';
 
 // Helper to format savings circle nested structure for the frontend
 function formatSavingsCircle(circle, circleMembers, contributions) {
@@ -780,6 +781,37 @@ export async function joinGroupByInviteCode(req, res) {
       metadata: {}
     });
 
+    // Create notifications for other members of the group
+    try {
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', dbGroup.id);
+
+      const { data: joinerProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userId)
+        .single();
+
+      if (members && members.length > 0) {
+        const otherMemberIds = members
+          .map(m => m.user_id)
+          .filter(id => id !== userId);
+
+        for (const memberId of otherMemberIds) {
+          await createNotification(memberId, {
+            type: 'member_added',
+            title: 'New Member Joined 👥',
+            message: `${joinerProfile?.full_name || 'A user'} joined the group "${dbGroup.name}"`,
+            action_url: `/groups/${dbGroup.id}`
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Failed to create member join notifications:', notifErr);
+    }
+
     return successResponse(res, dbGroup, 'Joined group successfully');
   } catch (error) {
     console.error('joinGroupByInviteCode error:', error);
@@ -896,6 +928,45 @@ export async function addExpense(req, res) {
       action: 'expense_added',
       metadata: { title: expenseRow.title, amount: expenseRow.amount }
     });
+
+    // 4. Create in-app and push notifications for other group members
+    try {
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', groupId);
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userId)
+        .single();
+
+      const { data: group } = await supabase
+        .from('groups')
+        .select('name')
+        .eq('id', groupId)
+        .single();
+
+      if (members && members.length > 0) {
+        const otherMemberIds = members
+          .map(m => m.user_id)
+          .filter(id => id !== userId);
+        
+        const gName = group?.name || 'group';
+
+        for (const memberId of otherMemberIds) {
+          await createNotification(memberId, {
+            type: 'expense',
+            title: 'New Expense Added 💸',
+            message: `${profile?.full_name || 'A member'} added "${expenseRow.title}" (₦${Number(expenseRow.amount).toLocaleString()}) in ${gName}`,
+            action_url: `/groups/${groupId}`
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Failed to create expense notifications:', notifErr);
+    }
 
     return successResponse(res, { id: insertedExpense.id }, 'Expense added successfully');
   } catch (error) {
@@ -1014,6 +1085,33 @@ export async function addSettlement(req, res) {
       metadata: { amount: Number(amount), from_user: from, to_user: to }
     });
 
+    // 3. Create notification for the creditor (recipient of settlement)
+    try {
+      const { data: group } = await supabase
+        .from('groups')
+        .select('name')
+        .eq('id', groupId)
+        .single();
+      const gName = group?.name || 'group';
+
+      const { data: payerProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', from)
+        .single();
+
+      if (to !== userId) {
+        await createNotification(to, {
+          type: 'payment',
+          title: 'Payment Recorded ✓',
+          message: `${payerProfile?.full_name || 'A member'} recorded a payment of ₦${Number(amount).toLocaleString()} to you in ${gName}`,
+          action_url: `/groups/${groupId}`
+        });
+      }
+    } catch (notifErr) {
+      console.error('Failed to create settlement notification:', notifErr);
+    }
+
     return successResponse(res, { id: insertedSettlement.id }, 'Settlement recorded successfully');
   } catch (error) {
     log.error('addSettlement error', error);
@@ -1066,6 +1164,39 @@ export async function inviteMember(req, res) {
     if (insertErr) {
       console.error('Error inserting member:', insertErr);
       return errorResponse(res, 'Failed to invite member', 500);
+    }
+
+    // Add activity log
+    await supabase.from('activity_logs').insert({
+      group_id: groupId,
+      user_id: req.user.id,
+      action: 'member_added',
+      metadata: { invited_user_id: profileRow.id }
+    });
+
+    // Notify the invited user
+    try {
+      const { data: group } = await supabase
+        .from('groups')
+        .select('name')
+        .eq('id', groupId)
+        .single();
+      const gName = group?.name || 'group';
+
+      const { data: inviterProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', req.user.id)
+        .single();
+
+      await createNotification(profileRow.id, {
+        type: 'member_added',
+        title: 'Added to Group 👥',
+        message: `${inviterProfile?.full_name || 'An admin'} added you to the group "${gName}"`,
+        action_url: `/groups/${groupId}`
+      });
+    } catch (notifErr) {
+      console.error('Failed to create member invite notification:', notifErr);
     }
 
     return successResponse(res, null, 'Member invited successfully');
