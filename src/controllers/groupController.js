@@ -246,13 +246,25 @@ export async function getGroups(req, res) {
           savings_circle = formatSavingsCircle(circleRow, circleMemberRows, contributionRows);
         }
       }
+      let parsedDescription = g.description || '';
+      let fundGoal = null;
+      if (g.type === 'fund' && g.description?.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(g.description);
+          parsedDescription = parsed.text || '';
+          fundGoal = parsed.fundGoal;
+        } catch (e) {
+          parsedDescription = g.description;
+        }
+      }
+
       return {
         id: g.id,
         name: g.name,
         emoji: g.emoji || 'fa-users',
         color: g.color || '#16a34a',
         currency: g.currency || 'NGN',
-        description: g.description || '',
+        description: parsedDescription,
         type: g.type || 'expense',
         status: g.status || 'active',
         inviteCode: g.invite_code,
@@ -260,7 +272,8 @@ export async function getGroups(req, res) {
         members,
         expenses,
         settlements,
-        savings_circle
+        savings_circle,
+        fundGoal
       };
     }));
 
@@ -281,7 +294,7 @@ export async function getGroups(req, res) {
 // Create a new group
 export async function createGroup(req, res) {
   try {
-    const { id, name, emoji, color, currency, type, description, inviteCode, members, savingsCircle } = req.body;
+    const { id, name, emoji, color, currency, type, description, inviteCode, members, savingsCircle, fundGoal } = req.body;
     const userId = req.user.id;
 
     if (!name) {
@@ -293,6 +306,11 @@ export async function createGroup(req, res) {
     // Auto-generate an invite code if one isn't provided
     const autoInviteCode = inviteCode || Math.random().toString(36).substring(2, 9).toUpperCase();
 
+    let finalDescription = description || '';
+    if (type === 'fund' && fundGoal) {
+      finalDescription = JSON.stringify({ text: description || '', fundGoal });
+    }
+
     const groupRow = {
       id: groupId,
       name,
@@ -300,7 +318,7 @@ export async function createGroup(req, res) {
       color: color || '#16a34a',
       currency: currency || 'NGN',
       type: type || 'expense',
-      description: description || '',
+      description: finalDescription,
       invite_code: autoInviteCode,
       created_by: userId,
       status: 'active'
@@ -625,13 +643,26 @@ export async function getGroupDetail(req, res) {
       }
     }
 
+    let parsedDescription = g.description || '';
+    let fundGoal = null;
+    if (g.type === 'fund' && g.description?.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(g.description);
+        parsedDescription = parsed.text || '';
+        fundGoal = parsed.fundGoal;
+      } catch (e) {
+        // Fallback if not valid JSON
+        parsedDescription = g.description;
+      }
+    }
+
     const groupDetailObj = {
       id: g.id,
       name: g.name,
       emoji: g.emoji || 'fa-users',
       color: g.color || '#16a34a',
       currency: g.currency || 'NGN',
-      description: g.description || '',
+      description: parsedDescription,
       type: g.type || 'expense',
       status: g.status || 'active',
       inviteCode: g.invite_code,
@@ -639,7 +670,8 @@ export async function getGroupDetail(req, res) {
       members,
       expenses,
       settlements,
-      savings_circle
+      savings_circle,
+      fundGoal
     };
 
     return successResponse(res, groupDetailObj, 'Group detail fetched successfully');
@@ -664,6 +696,18 @@ export async function getGroupDetailsByInviteCode(req, res) {
       return errorResponse(res, 'Invalid or expired invite link', 404);
     }
 
+    let parsedDescription = dbGroup.description || '';
+    let fundGoal = null;
+    if (dbGroup.type === 'fund' && dbGroup.description?.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(dbGroup.description);
+        parsedDescription = parsed.text || '';
+        fundGoal = parsed.fundGoal;
+      } catch (e) {
+        parsedDescription = dbGroup.description;
+      }
+    }
+
     return successResponse(res, {
       id: dbGroup.id,
       name: dbGroup.name || 'Unknown Group',
@@ -671,8 +715,9 @@ export async function getGroupDetailsByInviteCode(req, res) {
       color: dbGroup.color || '#16a34a',
       currency: dbGroup.currency || 'NGN',
       type: dbGroup.type || 'expense',
-      description: dbGroup.description || '',
-      inviteCode: dbGroup.invite_code
+      description: parsedDescription,
+      inviteCode: dbGroup.invite_code,
+      fundGoal
     }, 'Group invitation details found');
   } catch (error) {
     console.error('getGroupDetailsByInviteCode error:', error);
