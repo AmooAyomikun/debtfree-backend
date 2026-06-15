@@ -12,6 +12,7 @@ import userRouter from './src/routes/userRoutes.js';
 import groupRouter from './src/routes/groupRoutes.js';
 import kycRouter from './src/routes/kycRoutes.js';
 import creditRouter from './src/routes/creditRoutes.js';
+import authRouter from './src/routes/authRoutes.js';
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.use('/api/users', userRouter);
 app.use('/api/groups', groupRouter);
 app.use('/api/kyc', kycRouter);
 app.use('/api/credit', creditRouter);
+app.use('/api/auth', authRouter);
 
 // 404 handler
 app.use((req, res) => {
