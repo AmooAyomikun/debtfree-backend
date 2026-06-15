@@ -5,6 +5,7 @@ import { generateReference } from '../utils/generateReference.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import { log } from '../utils/logger.js';
 import { PAYSTACK_WEBHOOK_SECRET } from '../config/constants.js';
+import { emailService } from '../services/emailService.js';
 
 // POST /api/payments/initialize
 export async function initializePayment(req, res, next) {
@@ -112,6 +113,17 @@ export async function verifyPayment(req, res, next) {
     });
 
     log.payment(reference, 'VERIFIED_SUCCESS', { amount: amountPaid });
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single();
+
+    await emailService.sendPaymentConfirmation(
+      { email: user.email, full_name: profile?.full_name || 'User' },
+      { amount: amountPaid, type: 'credit', reference }
+    );
 
     return successResponse(res, {
       amount_credited: amountPaid,
@@ -327,6 +339,22 @@ export async function settleDebt(req, res, next) {
       }
     }
 
+    const { data: recipient } = await supabase
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', to_user_id)
+      .single();
+
+    if (recipient) {
+      await emailService.sendDebtSettledEmail(
+        { email: recipient.email },
+        {
+          senderName: profile.full_name,
+          amount,
+          groupName: 'your group'
+        }
+      );
+    }
 
     log.payment(reference, 'DEBT_SETTLED', {
       from: from_user.id,

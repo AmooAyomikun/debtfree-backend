@@ -1,6 +1,12 @@
 import { supabase } from '../config/supabase.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import { log } from '../utils/logger.js';
+import { emailService } from '../services/emailService.js';
+
+// MANUAL TASK: Run in Supabase SQL Editor:
+// alter table profiles 
+// add column if not exists welcome_email_sent boolean default false;
+
 
 // POST /api/notifications/register-token
 // Frontend sends FCM token after permission granted
@@ -19,6 +25,26 @@ export async function registerToken(req, res, next) {
     if (error) throw error;
 
     log.info('FCM token registered', { userId: user.id });
+    
+    // Check if this is user's first login
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, email, welcome_email_sent')
+      .eq('id', user.id)
+      .single();
+
+    if (profile && !profile.welcome_email_sent) {
+      await emailService.sendWelcomeEmail({
+        full_name: profile.full_name,
+        email: user.email
+      });
+      
+      await supabase
+        .from('profiles')
+        .update({ welcome_email_sent: true })
+        .eq('id', user.id);
+    }
+
     return successResponse(res, null, 'Notification token registered');
 
   } catch (error) {
