@@ -2,11 +2,14 @@ import nodemailer from 'nodemailer';
 import { log } from '../utils/logger.js';
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD
-  }
+  },
+  family: 4 // Force IPv4 to bypass Render's IPv6 resolution bug (ENETUNREACH)
 });
 
 const FROM_EMAIL = process.env.FROM_EMAIL || `"DebtFree" <${process.env.SMTP_USER}>`;
