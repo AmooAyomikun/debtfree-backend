@@ -1,8 +1,15 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { log } from '../utils/logger.js';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.FROM_EMAIL || 'DebtFree <onboarding@resend.dev>';
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASSWORD
+  }
+});
+
+const FROM_EMAIL = process.env.FROM_EMAIL || `"DebtFree" <${process.env.SMTP_USER}>`;
 const APP_URL = process.env.APP_URL;
 
 export const emailService = {
@@ -10,7 +17,7 @@ export const emailService = {
   // Welcome email after signup
   async sendWelcomeEmail(user) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
         subject: 'Welcome to DebtFree! 🎉',
@@ -84,7 +91,7 @@ export const emailService = {
   async sendPaymentConfirmation(user, { amount, type, reference }) {
     try {
       const isCredit = type === 'credit';
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
         subject: `${isCredit ? '✅ Payment Received' : '💸 Payment Sent'} - ₦${amount.toLocaleString()}`,
@@ -151,7 +158,7 @@ export const emailService = {
   // Contribution reminder email
   async sendContributionReminder(user, circle) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
         subject: `⏰ Reminder: Your ₦${circle.contribution_amount.toLocaleString()} contribution is due`,
@@ -222,7 +229,7 @@ export const emailService = {
   // Weekly group summary email
   async sendWeeklySummary(user, summary) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
         subject: `📊 Your DebtFree Weekly Summary`,
@@ -314,7 +321,7 @@ export const emailService = {
   // Debt settled notification email
   async sendDebtSettledEmail(recipient, { senderName, amount, groupName }) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: recipient.email,
         subject: `💚 ${senderName} just settled ₦${amount.toLocaleString()} with you!`,
@@ -369,7 +376,7 @@ export const emailService = {
   // Password reset email
   async sendPasswordResetEmail(email, resetLink) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: email,
         subject: '🔒 Reset your DebtFree password',
@@ -425,4 +432,3 @@ export const emailService = {
     }
   }
 };
-
