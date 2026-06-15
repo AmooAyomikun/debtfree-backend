@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 import { log } from '../utils/logger.js';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = 'DebtFree <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'DebtFree <onboarding@resend.dev>';
 const APP_URL = process.env.APP_URL;
 
 export const emailService = {
