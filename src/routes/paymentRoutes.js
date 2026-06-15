@@ -8,7 +8,8 @@ import {
   handleWebhook,
   settleDebt,
   getBanks,
-  resolveAccount
+  resolveAccount,
+  withdrawFunds
 } from '../controllers/paymentController.js';
 
 const router = Router();
@@ -23,6 +24,7 @@ router.use(authenticate);
 router.post('/initialize', paymentLimiter, checkKYCLimits, initializePayment);
 router.post('/verify', paymentLimiter, verifyPayment);
 router.post('/settle', paymentLimiter, checkKYCLimits, settleDebt);
+router.post('/withdraw', paymentLimiter, checkKYCLimits, withdrawFunds);
 
 // Bank routes with general rate limiting
 router.get('/banks', generalLimiter, getBanks);

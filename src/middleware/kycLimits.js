@@ -34,36 +34,37 @@ export const checkKYCLimits = async (req, res, next) => {
 
     const tierLimit = TIER_LIMITS[tier] || TIER_LIMITS.unverified;
 
-    // Calculate start and end of the current month
+    // Calculate start of the current day
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    now.setHours(0, 0, 0, 0);
+    const startOfDay = now.toISOString();
     
     const isFunding = req.originalUrl.includes('/initialize');
     const txTypes = isFunding ? ['credit', 'received'] : ['debit', 'sent'];
 
-    // Fetch user's wallet transactions of corresponding types for the current month
+    // Fetch user's wallet transactions of corresponding types for the current day
     const { data: transactions, error: txError } = await supabase
       .from('wallet_transactions')
       .select('amount')
       .eq('user_id', user.id)
       .in('type', txTypes)
       .in('status', ['success', 'completed'])
-      .gte('created_at', startOfMonth);
+      .gte('created_at', startOfDay);
 
     if (txError) {
       console.error('Error fetching transactions for KYC limit:', txError);
       return errorResponse(res, 'Internal server error', 500);
     }
 
-    // Sum all successful transaction amounts for the month
-    const currentMonthTotal = (transactions || []).reduce((sum, tx) => sum + Number(tx.amount), 0);
+    // Sum all successful transaction amounts for the day
+    const currentDayTotal = (transactions || []).reduce((sum, tx) => sum + Number(tx.amount), 0);
 
     // Check if the requested amount pushes them over the limit
-    if (currentMonthTotal + Number(requestedAmount) > tierLimit) {
+    if (currentDayTotal + Number(requestedAmount) > tierLimit) {
       const actionWord = isFunding ? 'Funding' : 'Transaction';
       return errorResponse(
         res,
-        `${actionWord} exceeds your monthly limit of ₦${tierLimit.toLocaleString()}. You have already used ₦${currentMonthTotal.toLocaleString()} this month. Please upgrade your KYC tier to increase your limit.`,
+        `${actionWord} exceeds your daily limit of ₦${tierLimit.toLocaleString()}. You have already used ₦${currentDayTotal.toLocaleString()} today. Please upgrade your KYC tier to increase your limit.`,
         403
       );
     }

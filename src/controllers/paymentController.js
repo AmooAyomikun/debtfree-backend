@@ -365,3 +365,105 @@ export async function resolveAccount(req, res, next) {
     return errorResponse(res, 'Could not resolve account. Please check details.', 400);
   }
 }
+
+// POST /api/payments/withdraw
+export async function withdrawFunds(req, res, next) {
+  try {
+    const { amount, accountNumber, bankCode, accountName } = req.body;
+    const user = req.user;
+
+    if (!amount || amount < 100) {
+      return errorResponse(res, 'Minimum withdrawal amount is ₦100', 400);
+    }
+    if (!accountNumber || !bankCode) {
+      return errorResponse(res, 'Account number and bank code are required', 400);
+    }
+
+    // Check user balance
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('wallet_balance, full_name')
+      .eq('id', user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      return errorResponse(res, 'Failed to retrieve profile', 500);
+    }
+
+    if (profile.wallet_balance < amount) {
+      return errorResponse(res, 'Insufficient wallet balance', 400);
+    }
+
+    const reference = generateReference('WD');
+
+    // 1. Create Transfer Recipient
+    let recipient;
+    try {
+      recipient = await paystackService.createTransferRecipient({
+        name: accountName || profile.full_name,
+        accountNumber,
+        bankCode
+      });
+    } catch (err) {
+      log.error('Failed to create transfer recipient:', err);
+      return errorResponse(res, 'Could not verify recipient with Paystack', 400);
+    }
+
+    // 2. Initiate Transfer
+    let transferRes;
+    try {
+      transferRes = await paystackService.initiateTransfer({
+        amount,
+        recipient: recipient.recipient_code,
+        reason: 'DebtFree Wallet Withdrawal',
+        reference
+      });
+    } catch (err) {
+      log.error('Failed to initiate transfer:', err);
+      return errorResponse(res, 'Transfer initiation failed at Paystack. Check your integration limits.', 400);
+    }
+
+    // 3. Debit user's wallet
+    const { error: deductError } = await supabase.rpc('debit_wallet', {
+      p_user_id: user.id,
+      p_amount: amount,
+      p_reference: reference
+    });
+
+    if (deductError) {
+      log.warn('debit_wallet RPC failed during withdrawal:', deductError);
+      // Fallback
+      await supabase
+        .from('profiles')
+        .update({ wallet_balance: profile.wallet_balance - amount })
+        .eq('id', user.id);
+    }
+
+    // 4. Record wallet transaction
+    await supabase.from('wallet_transactions').insert({
+      user_id: user.id,
+      type: 'debit',
+      amount,
+      description: `Withdrawal to ${accountNumber.slice(-4)}`,
+      reference,
+      status: transferRes.status === 'success' ? 'success' : 'pending',
+      payment_method: 'bank_transfer',
+      metadata: { transfer_code: transferRes.transfer_code }
+    });
+
+    // 5. Create notification
+    await supabase.from('notifications').insert({
+      user_id: user.id,
+      type: 'withdrawal',
+      title: 'Withdrawal Initiated',
+      message: `₦${amount.toLocaleString()} is being transferred to your bank account.`,
+      action_url: '/wallet'
+    });
+
+    return successResponse(res, { reference, status: transferRes.status }, 'Withdrawal initiated successfully');
+
+  } catch (error) {
+    log.error('Withdrawal error:', error);
+    next(error);
+  }
+}
