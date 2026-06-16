@@ -117,7 +117,7 @@ export async function verifyPayment(req, res, next) {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name')
+      .select('full_name, phone')
       .eq('id', user.id)
       .single();
 
