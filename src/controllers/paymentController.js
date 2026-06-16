@@ -203,6 +203,36 @@ async function handleChargeSuccess(data) {
     p_reference: reference
   });
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, phone, email')
+    .eq('id', userId)
+    .single();
+
+  if (profile) {
+    // We notify in the webhook to ensure reliable delivery even if the user closes the browser
+    await emailService.sendPaymentConfirmation(
+      { email: profile.email, full_name: profile.full_name || 'User' },
+      { amount: amount / 100, type: 'credit', reference }
+    );
+
+    if (profile.phone) {
+      await smsService.sendPaymentReceivedSMS(profile.phone, {
+        userName: profile.full_name?.split(' ')[0] || 'there',
+        amount: amount / 100,
+        senderName: 'DebtFree'
+      });
+    }
+
+    await supabase.from('notifications').insert({
+      user_id: userId,
+      type: 'payment',
+      title: 'Wallet Funded ✓',
+      message: `₦${(amount / 100).toLocaleString()} has been added to your wallet`,
+      action_url: '/wallet'
+    });
+  }
+
   log.payment(reference, 'CHARGE_SUCCESS_PROCESSED', { userId, amount: amount / 100 });
 }
 

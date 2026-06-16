@@ -49,6 +49,7 @@ function formatSavingsCircle(circle, circleMembers, contributions) {
   }
 
   return {
+    id: circle.id,
     contributionAmount: Number(circle.contribution_amount),
     frequency: circle.frequency,
     startDate: circle.start_date,
