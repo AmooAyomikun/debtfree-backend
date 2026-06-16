@@ -6,6 +6,7 @@ import { successResponse, errorResponse } from '../utils/response.js';
 import { log } from '../utils/logger.js';
 import { PAYSTACK_WEBHOOK_SECRET } from '../config/constants.js';
 import { emailService } from '../services/emailService.js';
+import { smsService } from '../services/smsService.js';
 
 // POST /api/payments/initialize
 export async function initializePayment(req, res, next) {
@@ -124,6 +125,14 @@ export async function verifyPayment(req, res, next) {
       { email: user.email, full_name: profile?.full_name || 'User' },
       { amount: amountPaid, type: 'credit', reference }
     );
+
+    if (profile?.phone) {
+      await smsService.sendPaymentReceivedSMS(profile.phone, {
+        userName: profile.full_name?.split(' ')[0] || 'there',
+        amount: amountPaid,
+        senderName: 'DebtFree'
+      });
+    }
 
     return successResponse(res, {
       amount_credited: amountPaid,
@@ -354,6 +363,20 @@ export async function settleDebt(req, res, next) {
           groupName: 'your group'
         }
       );
+
+      const { data: recipientProfile } = await supabase
+        .from('profiles')
+        .select('full_name, phone, email')
+        .eq('id', to_user_id)
+        .single();
+
+      if (recipientProfile?.phone) {
+        await smsService.sendSettlementSMS(recipientProfile.phone, {
+          userName: recipientProfile.full_name?.split(' ')[0] || 'there',
+          amount,
+          groupName: 'your group'
+        });
+      }
     }
 
     log.payment(reference, 'DEBT_SETTLED', {
