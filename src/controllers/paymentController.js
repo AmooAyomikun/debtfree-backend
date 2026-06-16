@@ -7,6 +7,7 @@ import { log } from '../utils/logger.js';
 import { PAYSTACK_WEBHOOK_SECRET } from '../config/constants.js';
 import { emailService } from '../services/emailService.js';
 import { smsService } from '../services/smsService.js';
+import { autoDebitService } from '../services/autoDebitService.js';
 
 // POST /api/payments/initialize
 export async function initializePayment(req, res, next) {
@@ -163,14 +164,26 @@ export async function handleWebhook(req, res, next) {
     log.payment(event.data?.reference, 'WEBHOOK_RECEIVED', { event: event.event });
 
     switch (event.event) {
+      case 'subscription.create':
+        await handleSubscriptionCreate(event.data);
+        break;
       case 'charge.success':
-        await handleChargeSuccess(event.data);
+        // Check if it's an auto-debit charge
+        if (event.data.metadata?.transaction_type === 'auto_debit_setup' ||
+            event.data.plan) {
+          await autoDebitService.processAutoDebitSuccess(event.data);
+        } else {
+          await handleChargeSuccess(event.data);
+        }
         break;
       case 'transfer.success':
         await handleTransferSuccess(event.data);
         break;
       case 'transfer.failed':
         await handleTransferFailed(event.data);
+        break;
+      case 'invoice.payment_failed':
+        await handleAutoDebitFailed(event.data);
         break;
       default:
         log.info('Unhandled webhook event', { event: event.event });
@@ -259,6 +272,52 @@ async function handleTransferFailed(data) {
     });
     log.payment(data.reference, 'TRANSFER_FAILED_REFUNDED', { amount: tx.amount });
   }
+}
+
+async function handleSubscriptionCreate(data) {
+  const userId = data.metadata?.user_id;
+  if (!userId) return;
+
+  await supabase
+    .from('auto_debit_subscriptions')
+    .update({
+      status: 'active',
+      subscription_code: data.subscription_code,
+      email_token: data.email_token,
+      next_charge_date: data.next_payment_date
+    })
+    .eq('user_id', userId)
+    .eq('status', 'pending');
+
+  log.info('Subscription activated', { userId });
+}
+
+async function handleAutoDebitFailed(data) {
+  const userId = data.subscription?.metadata?.user_id;
+  if (!userId) return;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, email, phone')
+    .eq('id', userId)
+    .single();
+
+  if (profile?.phone) {
+    await smsService.sendSMS(profile.phone,
+      `Hi ${profile.full_name?.split(' ')[0]}! ` +
+      `Your auto-debit payment failed. ` +
+      `Please update your payment method: ` +
+      `${process.env.APP_URL}/wallet`
+    );
+  }
+
+  await supabase.from('notifications').insert({
+    user_id: userId,
+    type: 'payment',
+    title: 'Auto-debit Failed ⚠️',
+    message: 'Your automatic contribution payment failed. Please pay manually.',
+    action_url: '/wallet'
+  });
 }
 
 // POST /api/payments/settle

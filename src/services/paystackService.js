@@ -58,5 +58,40 @@ export const paystackService = {
       reference
     });
     return response.data.data;
+  },
+
+  // Create subscription plan
+  async createPlan({ name, amount, interval }) {
+    const response = await paystack.post('/plan', {
+      name,
+      amount: Math.round(amount * 100),
+      interval
+    });
+    return response.data.data;
+  },
+
+  // Disable/cancel subscription
+  async disableSubscription(subscriptionCode, emailToken) {
+    const response = await paystack.post('/subscription/disable', {
+      code: subscriptionCode,
+      token: emailToken
+    });
+    return response.data.data;
+  },
+
+  // List subscriptions
+  async listSubscriptions(planCode) {
+    const response = await paystack.get(
+      `/subscription?plan=${planCode}`
+    );
+    return response.data.data;
+  },
+
+  // Fetch subscription
+  async fetchSubscription(subscriptionCode) {
+    const response = await paystack.get(
+      `/subscription/${subscriptionCode}`
+    );
+    return response.data.data;
   }
 };

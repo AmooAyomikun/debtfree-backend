@@ -15,6 +15,7 @@ import creditRouter from './src/routes/creditRoutes.js';
 import authRouter from './src/routes/authRoutes.js';
 import emailRouter from './src/routes/emailRoutes.js';
 import smsRouter from './src/routes/smsRoutes.js';
+import autoDebitRouter from './src/routes/autoDebitRoutes.js';
 
 const app = express();
 
@@ -89,6 +90,7 @@ app.use('/api/credit', creditRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/email', emailRouter);
 app.use('/api/sms', smsRouter);
+app.use('/api/auto-debit', autoDebitRouter);
 
 // 404 handler
 app.use((req, res) => {
