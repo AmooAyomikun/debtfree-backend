@@ -17,6 +17,9 @@ import emailRouter from './src/routes/emailRoutes.js';
 
 const app = express();
 
+// Trust proxy for Render reverse proxy (fixes rate-limiting client IP identification)
+app.set('trust proxy', 1);
+
 // Webhook route needs raw body BEFORE express.json()
 // We will add this when payment routes are registered
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
