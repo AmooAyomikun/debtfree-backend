@@ -1283,7 +1283,7 @@ export async function recordPayout(req, res) {
     const userId = req.user.id;
     const { cycleNumber, date } = req.body;
 
-    // Admin-only action
+    // Admin check
     const { data: adminCheck } = await supabase
       .from('group_members')
       .select('role')
@@ -1291,9 +1291,7 @@ export async function recordPayout(req, res) {
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (!adminCheck || adminCheck.role !== 'admin') {
-      return errorResponse(res, 'Only group admins can record payouts', 403);
-    }
+    const isAdmin = adminCheck && adminCheck.role === 'admin';
 
     // 1. Fetch the circle for this group
     const { data: circle, error: circleErr } = await supabase
@@ -1313,8 +1311,13 @@ export async function recordPayout(req, res) {
       .eq('circle_id', circle.id)
       .eq('position', cycleNumber);
 
-    if (circleMembers && circleMembers.length > 0) {
-      const recipient = circleMembers[0];
+    const recipient = circleMembers && circleMembers.length > 0 ? circleMembers[0] : null;
+
+    if (!isAdmin && (!recipient || recipient.user_id !== userId)) {
+      return errorResponse(res, 'Only group admins or the cycle recipient can record payouts', 403);
+    }
+
+    if (recipient) {
       // Update has_received status in circle_members
       await supabase
         .from('circle_members')
