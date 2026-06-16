@@ -22,8 +22,7 @@ export const smsService = {
 
       const result = await sms.send({
         to: [formatted],
-        message,
-        from: 'DebtFree'
+        message
       });
 
       log.info('SMS sent', { 
@@ -48,8 +47,7 @@ export const smsService = {
 
       const result = await sms.send({
         to: formatted,
-        message,
-        from: 'DebtFree'
+        message
       });
 
       log.info('Bulk SMS sent', { count: formatted.length });
