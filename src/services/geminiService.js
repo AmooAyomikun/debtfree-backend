@@ -1,98 +1,40 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { log } from '../utils/logger.js';
 
-export async function scanReceiptWithGemini(base64Image, mimeType = 'image/jpeg') {
-  console.log('Starting Gemini scan with official SDK...');
-  console.log('Image size (chars):', base64Image.length);
-  console.log('Mime type:', mimeType);
-  console.log('API Key prefix:', process.env.GEMINI_API_KEY?.substring(0, 15));
-
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-  // Try models in order
-  const modelNames = [
-    'gemini-3.5-flash',
-    'gemini-3-flash-preview',
-    'gemini-flash-latest',
-    'gemini-flash-lite-latest'
-  ];
-
-  for (const modelName of modelNames) {
-    try {
-      console.log(`Trying model: ${modelName}`);
-
-      const model = genAI.getGenerativeModel({ model: modelName });
-
-      const imagePart = {
-        inlineData: {
-          data: base64Image,
-          mimeType: mimeType
-        }
-      };
-
-      const prompt = `You are a receipt parser. Analyze this receipt image.
-Return ONLY a valid JSON object with no markdown formatting, no backticks, no extra text.
-
-Format:
-{
-  "title": "merchant name or expense description",
-  "amount": total amount as number only no symbols,
-  "category": "one of: Food, Transport, Rent, Shopping, Fun, Travel, Health, Other",
-  "date": "YYYY-MM-DD or null",
-  "items": ["item1", "item2"],
-  "currency": "NGN"
+let ai;
+try {
+  if (process.env.GEMINI_API_KEY) {
+    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+} catch (error) {
+  log.warn('Failed to initialize Gemini AI client:', error.message);
 }
 
-If not a receipt or unreadable, return: {"error": "unreadable"}
-Return ONLY the JSON, nothing else.`;
+export const geminiService = {
+  async generateFinancialInsight(summary) {
+    if (!ai) {
+      log.warn('Gemini API key missing, returning default insight');
+      return "Tip: Keeping a close eye on your active groups can help you stay ahead of your financial goals.";
+    }
 
-      const result = await model.generateContent([prompt, imagePart]);
-      const response = await result.response;
-      const rawText = response.text().trim();
+    try {
+      const prompt = `You are a helpful and concise financial advisor for DebtFree, a Nigerian group savings (Ajo) and bill splitting app. 
+      Analyze this user's weekly summary:
+      - Total Owed to them: ₦${summary.totalOwed}
+      - Total They Owe: ₦${summary.totalOwing}
+      - Active Groups: ${summary.groupCount}
+      
+      Provide a brief, encouraging 1-2 sentence actionable tip addressing their specific situation (e.g., if they owe a lot, suggest prioritizing payments; if they are owed a lot, suggest sending gentle reminders). Do not use hashtags. Keep it conversational.`;
 
-      console.log('Raw Gemini response:', rawText);
-
-      // Clean any accidental markdown
-      const cleaned = rawText
-        .replace(/```json\n?/g, '')
-        .replace(/```\n?/g, '')
-        .trim();
-
-      console.log('Cleaned response:', cleaned);
-
-      const parsed = JSON.parse(cleaned);
-
-      if (parsed.error) {
-        throw new Error('Receipt could not be read clearly');
-      }
-
-      if (!parsed.amount && !parsed.title) {
-        throw new Error('Receipt could not be read clearly');
-      }
-
-      console.log('Successfully parsed:', parsed);
-      log.info('Receipt scanned successfully via SDK', { 
-        model: modelName, 
-        title: parsed.title 
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
       });
 
-      return parsed;
-
+      return response.text;
     } catch (error) {
-      if (error.message === 'Receipt could not be read clearly') {
-        throw error;
-      }
-
-      console.error(`Model ${modelName} failed:`, error.message);
-
-      // If last model also failed, throw
-      if (modelName === modelNames[modelNames.length - 1]) {
-        console.error('All models failed. Last error:', error);
-        throw error;
-      }
-
-      // Otherwise try next model
-      console.log('Trying next model...');
+      log.error('Gemini AI generation failed', error);
+      return "Tip: A quick review of your wallet balance can help you plan your upcoming contributions.";
     }
   }
-}
+};

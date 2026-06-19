@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { log } from '../utils/logger.js';
+import { geminiService } from './geminiService.js';
 
 // Configure Nodemailer to use Gmail SMTP
 const transporter = nodemailer.createTransport({
@@ -232,6 +233,8 @@ export const emailService = {
   // Weekly group summary email
   async sendWeeklySummary(user, summary) {
     try {
+      const insight = await geminiService.generateFinancialInsight(summary);
+
       await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
@@ -289,6 +292,14 @@ export const emailService = {
                       </span>
                     </div>
                   `).join('') || '<p style="color:#94a3b8;">No active groups</p>'}
+                </div>
+                
+                <!-- AI Insight -->
+                <div style="background:#e0e7ff;border-left:4px solid #4f46e5;border-radius:8px;padding:16px;margin-bottom:24px;">
+                  <h4 style="color:#3730a3;margin:0 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:0.05em;">✨ AI Financial Insight</h4>
+                  <p style="color:#312e81;margin:0;font-size:14px;line-height:1.5;">
+                    ${insight}
+                  </p>
                 </div>
                 
                 <div style="text-align:center;">

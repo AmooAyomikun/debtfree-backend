@@ -8,6 +8,7 @@ import { PAYSTACK_WEBHOOK_SECRET } from '../config/constants.js';
 import { emailService } from '../services/emailService.js';
 import { smsService } from '../services/smsService.js';
 import { autoDebitService } from '../services/autoDebitService.js';
+import { whatsappService } from '../services/whatsappService.js';
 
 // POST /api/payments/initialize
 export async function initializePayment(req, res, next) {
@@ -235,6 +236,11 @@ async function handleChargeSuccess(data) {
         amount: amount / 100,
         senderName: 'DebtFree'
       });
+      await whatsappService.sendPaymentReceived(profile.phone, {
+        userName: profile.full_name?.split(' ')[0] || 'there',
+        amount: amount / 100,
+        senderName: 'DebtFree'
+      });
     }
 
     await supabase.from('notifications').insert({
@@ -309,6 +315,9 @@ async function handleAutoDebitFailed(data) {
       `Please update your payment method: ` +
       `${process.env.APP_URL}/wallet`
     );
+    await whatsappService.sendAutoDebitFailed(profile.phone, {
+      userName: profile.full_name?.split(' ')[0] || 'there'
+    });
   }
 
   await supabase.from('notifications').insert({
@@ -464,6 +473,11 @@ export async function settleDebt(req, res, next) {
           userName: recipientProfile.full_name?.split(' ')[0] || 'there',
           amount,
           groupName: 'your group'
+        });
+        await whatsappService.sendPaymentReceived(recipientProfile.phone, {
+          userName: recipientProfile.full_name?.split(' ')[0] || 'there',
+          amount,
+          senderName: profile.full_name || 'A group member'
         });
       }
     }
