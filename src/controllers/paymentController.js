@@ -134,6 +134,11 @@ export async function verifyPayment(req, res, next) {
         amount: amountPaid,
         senderName: 'DebtFree'
       });
+      await whatsappService.sendPaymentReceived(profile.phone, {
+        userName: profile.full_name?.split(' ')[0] || 'there',
+        amount: amountPaid,
+        senderName: 'DebtFree'
+      });
     }
 
     return successResponse(res, {
