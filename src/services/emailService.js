@@ -1,16 +1,26 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { log } from '../utils/logger.js';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = 'DebtFree <onboarding@resend.dev>';
-const APP_URL = process.env.APP_URL;
+// Configure Nodemailer to use Gmail SMTP
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // true for 465, false for other ports
+  auth: {
+    user: process.env.SMTP_USER, // e.g. amooquadri555@gmail.com
+    pass: process.env.SMTP_PASS, // The 16-character App Password
+  },
+});
+
+const FROM_EMAIL = `"DebtFree" <${process.env.SMTP_USER}>`;
+const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 
 export const emailService = {
 
   // Welcome email after signup
   async sendWelcomeEmail(user) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
         subject: 'Welcome to DebtFree! 🎉',
@@ -74,7 +84,7 @@ export const emailService = {
           </html>
         `
       });
-      log.info('Welcome email sent', { email: user.email });
+      log.info('Welcome email sent via NodeMailer', { email: user.email });
     } catch (error) {
       log.error('Welcome email failed', error);
     }
@@ -84,7 +94,7 @@ export const emailService = {
   async sendPaymentConfirmation(user, { amount, type, reference }) {
     try {
       const isCredit = type === 'credit';
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
         subject: `${isCredit ? '✅ Payment Received' : '💸 Payment Sent'} - ₦${amount.toLocaleString()}`,
@@ -142,7 +152,7 @@ export const emailService = {
           </html>
         `
       });
-      log.info('Payment confirmation email sent', { email: user.email, amount });
+      log.info('Payment confirmation email sent via NodeMailer', { email: user.email, amount });
     } catch (error) {
       log.error('Payment confirmation email failed', error);
     }
@@ -151,7 +161,7 @@ export const emailService = {
   // Contribution reminder email
   async sendContributionReminder(user, circle) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
         subject: `⏰ Reminder: Your ₦${circle.contribution_amount.toLocaleString()} contribution is due`,
@@ -213,7 +223,7 @@ export const emailService = {
           </html>
         `
       });
-      log.info('Contribution reminder sent', { email: user.email, circle: circle.name });
+      log.info('Contribution reminder sent via NodeMailer', { email: user.email, circle: circle.name });
     } catch (error) {
       log.error('Contribution reminder failed', error);
     }
@@ -222,7 +232,7 @@ export const emailService = {
   // Weekly group summary email
   async sendWeeklySummary(user, summary) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: user.email,
         subject: `📊 Your DebtFree Weekly Summary`,
@@ -305,7 +315,7 @@ export const emailService = {
           </html>
         `
       });
-      log.info('Weekly summary sent', { email: user.email });
+      log.info('Weekly summary sent via NodeMailer', { email: user.email });
     } catch (error) {
       log.error('Weekly summary failed', error);
     }
@@ -314,7 +324,7 @@ export const emailService = {
   // Debt settled notification email
   async sendDebtSettledEmail(recipient, { senderName, amount, groupName }) {
     try {
-      await resend.emails.send({
+      await transporter.sendMail({
         from: FROM_EMAIL,
         to: recipient.email,
         subject: `💚 ${senderName} just settled ₦${amount.toLocaleString()} with you!`,
@@ -360,7 +370,7 @@ export const emailService = {
           </html>
         `
       });
-      log.info('Debt settled email sent', { email: recipient.email });
+      log.info('Debt settled email sent via NodeMailer', { email: recipient.email });
     } catch (error) {
       log.error('Debt settled email failed', error);
     }
