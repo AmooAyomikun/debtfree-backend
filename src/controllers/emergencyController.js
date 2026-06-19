@@ -20,7 +20,7 @@ export async function getEmergencyPot(req, res, next) {
     const { data: loans } = await supabase
       .from('emergency_loans')
       .select(`
-        id, amount, status, created_at,
+        id, amount, status, created_at, reason, user_id,
         profiles (id, full_name, avatar_url)
       `)
       .eq('group_id', groupId)
