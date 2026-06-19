@@ -174,6 +174,17 @@ export async function approveEmergencyLoan(req, res, next) {
       p_reference: reference
     });
 
+    // Record wallet transaction
+    await supabase.from('wallet_transactions').insert({
+      user_id: loan.user_id,
+      type: 'credit',
+      amount: loan.amount,
+      description: 'Emergency loan disbursed',
+      reference,
+      status: 'success',
+      payment_method: 'wallet'
+    });
+
     const { data: group } = await supabase.from('groups').select('name').eq('id', groupId).single();
 
     if (loan.profiles?.phone) {
