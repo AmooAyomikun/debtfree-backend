@@ -68,20 +68,54 @@ router.post('/weekly-summary', async (req, res, next) => {
       .eq('id', user.id)
       .single();
     
-    // Get user's group balances
+    // Get user's group memberships
     const { data: memberships } = await supabase
       .from('group_members')
       .select('groups(id, name)')
       .eq('user_id', user.id);
+      
+    const groupIds = memberships?.map(m => m.groups?.id).filter(Boolean) || [];
+    let totalOwed = 0;
+    let totalOwing = 0;
+    const groupBalances = {};
+
+    groupIds.forEach(id => {
+      const gName = memberships.find(m => m.groups?.id === id)?.groups?.name || 'Unknown Group';
+      groupBalances[id] = { name: gName, balance: 0 };
+    });
+
+    if (groupIds.length > 0) {
+      const { data: expenses } = await supabase
+        .from('expenses')
+        .select(`
+          paid_by, group_id,
+          expense_splits (user_id, amount, is_settled)
+        `)
+        .in('group_id', groupIds);
+
+      if (expenses) {
+        expenses.forEach(exp => {
+          exp.expense_splits?.forEach(split => {
+            if (!split.is_settled) {
+              const amount = Number(split.amount);
+              if (exp.paid_by === user.id && split.user_id !== user.id) {
+                totalOwed += amount;
+                if (groupBalances[exp.group_id]) groupBalances[exp.group_id].balance += amount;
+              } else if (split.user_id === user.id && exp.paid_by !== user.id) {
+                totalOwing += amount;
+                if (groupBalances[exp.group_id]) groupBalances[exp.group_id].balance -= amount;
+              }
+            }
+          });
+        });
+      }
+    }
     
     const summary = {
-      totalOwed: 0,
-      totalOwing: 0,
-      groupCount: memberships?.length || 0,
-      groups: memberships?.map(m => ({
-        name: m.groups?.name,
-        balance: 0
-      })) || []
+      totalOwed,
+      totalOwing,
+      groupCount: groupIds.length,
+      groups: Object.values(groupBalances)
     };
     
     await emailService.sendWeeklySummary(
