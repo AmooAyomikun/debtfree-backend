@@ -1,9 +1,9 @@
-# DebtFree Backend ⚙️
+# DebtFree Backend 
 > The Node.js API powering the DebtFree social finance platform.
 
 DebtFree is a comprehensive social finance application that manages group expenses, community savings circles (Ajo/Esusu), and peer-to-peer emergency pots. This repository contains the backend infrastructure that handles payments, identity verification, complex notifications, and automated recurring jobs.
 
-## 🌟 Core Services
+## Core Services
 
 *   **Payment Orchestration (Paystack):** 
     *   Creates and verifies Wallet funding transactions.
@@ -19,7 +19,7 @@ DebtFree is a comprehensive social finance application that manages group expens
     *   Runs automated checks on Savings Circle (Ajo) cycles to process payouts.
     *   Triggers automated weekly emails for user balances.
 
-## 🛠 Tech Stack
+## Tech Stack
 
 *   **Runtime:** Node.js
 *   **Framework:** Express.js
@@ -29,7 +29,7 @@ DebtFree is a comprehensive social finance application that manages group expens
     *   Twilio API (WhatsApp & SMS messaging)
     *   Resend API (Transactional & Batch Emails)
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 *   Node.js (v18+)
@@ -75,7 +75,7 @@ DebtFree is a comprehensive social finance application that manages group expens
    npm run dev
    ```
 
-## 📂 Project Structure
+##  Project Structure
 ```text
 src/
 ├── controllers/    # Request handlers (balance, email, group, payment, twilio)
@@ -84,8 +84,8 @@ src/
 ├── index.js        # Express app configuration and server start
 ```
 
-## 🤝 Contributing
+##  Contributing
 Contributions, issues, and feature requests are welcome!
 
-## 📄 License
+##  License
 This project is licensed under the MIT License.
